@@ -140,6 +140,55 @@ def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
                 except Exception:
                     pki_info['roles'] = []
                 
+                try:
+                    # List all issuers (certificates) in this PKI engine
+                    issuers_response = client.list(f"{pki_info['path']}/issuers")
+                    if issuers_response and 'data' in issuers_response:
+                        issuer_ids = issuers_response['data'].get('keys', [])
+                        pki_info['issuers'] = []
+                        
+                        # Get details for each issuer
+                        for issuer_id in issuer_ids:
+                            try:
+                                issuer_detail = client.read(f"{pki_info['path']}/issuer/{issuer_id}")
+                                if issuer_detail and 'data' in issuer_detail:
+                                    issuer_cert = issuer_detail['data'].get('certificate', '')
+                                    issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
+                                    
+                                    # Parse certificate details
+                                    cert_dates = parse_certificate_dates(issuer_cert)
+                                    
+                                    issuer_info = {
+                                        'id': issuer_id,
+                                        'name': issuer_name,
+                                        'certificate': issuer_cert,
+                                        'not_before': cert_dates['not_before'],
+                                        'not_after': cert_dates['not_after']
+                                    }
+                                    
+                                    # Extract subject from certificate if possible
+                                    try:
+                                        if issuer_cert:
+                                            cert = x509.load_pem_x509_certificate(issuer_cert.encode(), default_backend())
+                                            subject = cert.subject
+                                            common_name = None
+                                            for attribute in subject:
+                                                if attribute.oid == x509.NameOID.COMMON_NAME:
+                                                    common_name = attribute.value
+                                                    break
+                                            issuer_info['common_name'] = common_name
+                                    except Exception:
+                                        issuer_info['common_name'] = None
+                                    
+                                    pki_info['issuers'].append(issuer_info)
+                            except Exception:
+                                # If we can't get details for this issuer, skip it
+                                continue
+                    else:
+                        pki_info['issuers'] = []
+                except Exception:
+                    pki_info['issuers'] = []
+                
                 pki_engines.append(pki_info)
         
         return pki_engines
@@ -203,6 +252,38 @@ def print_pki_scan_results(pki_engines: List[Dict[str, Any]]) -> None:
             print(f"   Roles: {', '.join(engine['roles'])}")
         else:
             print("   Roles: None configured")
+        
+        # Display issuers information
+        if engine.get('issuers'):
+            print(f"   Issuers: {len(engine['issuers'])} certificate(s)")
+            for j, issuer in enumerate(engine['issuers'], 1):
+                issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
+                print(f"     {j}. {issuer_name}")
+                print(f"        ID: {issuer['id']}")
+                
+                if issuer.get('not_before') and issuer.get('not_after'):
+                    start_date = format_datetime(issuer['not_before'])
+                    end_date = format_datetime(issuer['not_after'])
+                    print(f"        Valid: {start_date} to {end_date}")
+                    
+                    # Check expiration status for this issuer
+                    cert_expiry = issuer['not_after']
+                    if cert_expiry.tzinfo is None:
+                        cert_expiry = cert_expiry.replace(tzinfo=datetime.timezone.utc)
+                    
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    days_until_expiry = (cert_expiry - now).days
+                    
+                    if days_until_expiry < 0:
+                        print(f"        ⚠️  EXPIRED {abs(days_until_expiry)} days ago")
+                    elif days_until_expiry < 30:
+                        print(f"        ⚠️  Expires in {days_until_expiry} days")
+                    elif days_until_expiry < 90:
+                        print(f"        ⚡ Expires in {days_until_expiry} days")
+                else:
+                    print(f"        Valid: Unknown")
+        else:
+            print("   Issuers: None found")
         
         if engine['ca_config']:
             print("   CA Configuration:")
