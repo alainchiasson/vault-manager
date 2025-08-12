@@ -1130,16 +1130,15 @@ def print_root_ca_rotation_result(result: Dict[str, Any]) -> None:
         print("4. Eventually retire old root CA when all certificates have migrated")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Vault PKI Manager")
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
-    
-    # Scan command
+def setup_scan_parser(subparsers):
+    """Setup the scan command parser."""
     scan_parser = subparsers.add_parser('scan', help='Scan for PKI secrets engines')
     scan_parser.add_argument('--wide', action='store_true', help='Use wide timeline (100 characters instead of 50)')
     scan_parser.add_argument('--width', type=int, help='Custom timeline width in characters (overrides --wide)')
-    
-    # Create root CA command
+
+
+def setup_create_root_ca_parser(subparsers):
+    """Setup the create-root-ca command parser."""
     create_ca_parser = subparsers.add_parser('create-root-ca', help='Create a new root CA')
     create_ca_parser.add_argument('--mount-path', required=True, help='PKI mount path (e.g., pki)')
     create_ca_parser.add_argument('--common-name', required=True, help='Common name for the root CA')
@@ -1149,8 +1148,10 @@ def main():
     create_ca_parser.add_argument('--key-bits', type=int, default=2048, help='Key size in bits (default: 2048)')
     create_ca_parser.add_argument('--key-type', default='rsa', choices=['rsa', 'ec', 'ed25519'], help='Key type (default: rsa)')
     create_ca_parser.add_argument('--enable-engine', action='store_true', help='Enable PKI engine if not already mounted')
-    
-    # Create intermediate CA command
+
+
+def setup_create_intermediate_ca_parser(subparsers):
+    """Setup the create-intermediate-ca command parser."""
     create_intermediate_parser = subparsers.add_parser('create-intermediate-ca', help='Create a new intermediate CA (issuing certificate)')
     create_intermediate_parser.add_argument('--mount-path', required=True, help='PKI mount path for intermediate CA (e.g., pki-int)')
     create_intermediate_parser.add_argument('--common-name', required=True, help='Common name for the intermediate CA')
@@ -1161,14 +1162,18 @@ def main():
     create_intermediate_parser.add_argument('--key-bits', type=int, default=2048, help='Key size in bits (default: 2048)')
     create_intermediate_parser.add_argument('--key-type', default='rsa', choices=['rsa', 'ec', 'ed25519'], help='Key type (default: rsa)')
     create_intermediate_parser.add_argument('--enable-engine', action='store_true', help='Enable PKI engine if not already mounted')
-    
-    # Set default issuer command
+
+
+def setup_set_default_issuer_parser(subparsers):
+    """Setup the set-default-issuer command parser."""
     set_default_parser = subparsers.add_parser('set-default-issuer', help='Set an issuer as the default for a PKI engine')
     set_default_parser.add_argument('--mount-path', required=True, help='PKI mount path (e.g., pki)')
     set_default_parser.add_argument('--issuer-id', help='Issuer ID to set as default (if not provided, will list available issuers)')
     set_default_parser.add_argument('--list-only', action='store_true', help='Only list available issuers without setting default')
-    
-    # Rotate root CA command
+
+
+def setup_rotate_root_ca_parser(subparsers):
+    """Setup the rotate-root-ca command parser."""
     rotate_ca_parser = subparsers.add_parser('rotate-root-ca', help='Create a new root CA alongside existing ones (dual root setup)')
     rotate_ca_parser.add_argument('--mount-path', required=True, help='PKI mount path (e.g., pki)')
     rotate_ca_parser.add_argument('--common-name', required=True, help='Common name for the new root CA')
@@ -1177,7 +1182,84 @@ def main():
     rotate_ca_parser.add_argument('--ttl', default='17520h', help='Certificate TTL (default: 17520h = 2 years)')
     rotate_ca_parser.add_argument('--key-bits', type=int, default=2048, help='Key size in bits (default: 2048)')
     rotate_ca_parser.add_argument('--key-type', default='rsa', choices=['rsa', 'ec', 'ed25519'], help='Key type (default: rsa)')
+
+
+def create_argument_parser():
+    """Create and configure the main argument parser with all subcommands."""
+    parser = argparse.ArgumentParser(description="Vault PKI Manager")
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
+    # Setup all command parsers
+    setup_scan_parser(subparsers)
+    setup_create_root_ca_parser(subparsers)
+    setup_create_intermediate_ca_parser(subparsers)
+    setup_set_default_issuer_parser(subparsers)
+    setup_rotate_root_ca_parser(subparsers)
+    
+    return parser
+
+
+def build_ca_data(common_name: str, ttl: str, key_bits: int, key_type: str, 
+                  country: Optional[str] = None, organization: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Build CA data dictionary for certificate generation.
+    
+    Args:
+        common_name: Common name for the certificate
+        ttl: Time to live for the certificate
+        key_bits: Number of bits for the key
+        key_type: Type of key to generate
+        country: Country code (optional)
+        organization: Organization name (optional)
+        
+    Returns:
+        Dictionary with CA generation parameters
+    """
+    ca_data = {
+        'common_name': common_name,
+        'ttl': ttl,
+        'key_bits': key_bits,
+        'key_type': key_type,
+        'format': 'pem'
+    }
+    
+    # Add optional fields if provided
+    if country:
+        ca_data['country'] = country
+    if organization:
+        ca_data['organization'] = organization
+    
+    return ca_data
+
+
+def calculate_expiry_status(cert_expiry: datetime) -> str:
+    """
+    Calculate the expiry status for a certificate.
+    
+    Args:
+        cert_expiry: Certificate expiry datetime
+        
+    Returns:
+        Status string with expiry information
+    """
+    # Ensure timezone-aware comparison
+    cert_expiry = ensure_timezone_aware(cert_expiry)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    days_until_expiry = (cert_expiry - now).days
+    
+    if days_until_expiry < 0:
+        return f"⚠️  EXPIRED {abs(days_until_expiry)} days ago"
+    elif days_until_expiry < 30:
+        return f"⚠️  Expires in {days_until_expiry} days"
+    elif days_until_expiry < 90:
+        return f"⚡ Expires in {days_until_expiry} days"
+    else:
+        return f"✓ Valid ({days_until_expiry} days remaining)"
+
+
+def main():
+    parser = create_argument_parser()
     args = parser.parse_args()
     
     if not args.command:
