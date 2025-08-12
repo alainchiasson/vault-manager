@@ -5,14 +5,18 @@ from typing import Dict, Any
 
 # Import the core functions from main
 from main import (
-    enable_pki_engine,
-    create_root_ca,
-    print_root_ca_result,
     create_intermediate_ca,
     print_intermediate_ca_result,
     list_issuers_for_selection,
     set_default_issuer,
-    print_set_default_issuer_result,
+    print_set_default_issuer_result
+)
+
+# Import root CA operations from root_ca_operations module
+from root_ca_operations import (
+    enable_pki_engine,
+    create_root_ca,
+    print_root_ca_result,
     rotate_root_ca,
     print_root_ca_rotation_result
 )
