@@ -57,6 +57,154 @@ def parse_certificate_dates(cert_pem: str) -> Dict[str, Optional[datetime]]:
         return {'not_before': None, 'not_after': None}
 
 
+def extract_common_name_from_certificate(cert_pem: str) -> Optional[str]:
+    """
+    Extract the common name from a certificate PEM.
+    
+    Args:
+        cert_pem: Certificate in PEM format
+        
+    Returns:
+        Common name string or None if not found
+    """
+    try:
+        if not cert_pem or not cert_pem.strip():
+            return None
+        
+        cert = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
+        subject = cert.subject
+        
+        for attribute in subject:
+            if attribute.oid == x509.NameOID.COMMON_NAME:
+                return attribute.value
+        return None
+    except Exception:
+        return None
+
+
+def ensure_timezone_aware(dt: datetime) -> datetime:
+    """
+    Ensure a datetime object is timezone-aware (UTC).
+    
+    Args:
+        dt: Datetime object to check
+        
+    Returns:
+        Timezone-aware datetime object
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.timezone.utc)
+    return dt
+
+
+def validate_pki_engine(client: hvac.Client, mount_path: str) -> None:
+    """
+    Validate that a PKI secrets engine exists at the specified path.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: Path to validate
+        
+    Raises:
+        ValueError: If the path doesn't exist or isn't a PKI engine
+    """
+    mount_path = mount_path.rstrip('/')
+    mounts = client.sys.list_mounted_secrets_engines()
+    
+    if f"{mount_path}/" not in mounts['data']:
+        raise ValueError(f"No secrets engine mounted at '{mount_path}'. Please mount a PKI engine first.")
+    
+    if mounts['data'][f"{mount_path}/"].get('type') != 'pki':
+        raise ValueError(f"Secrets engine at '{mount_path}' is not a PKI engine.")
+
+
+def configure_ca_urls(client: hvac.Client, mount_path: str) -> None:
+    """
+    Configure CA URLs for a PKI engine.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: PKI mount path
+    """
+    try:
+        vault_addr = os.getenv('VAULT_ADDR', 'http://localhost:8200')
+        urls_config = {
+            'issuing_certificates': f"{vault_addr}/v1/{mount_path}/ca",
+            'crl_distribution_points': f"{vault_addr}/v1/{mount_path}/crl"
+        }
+        client.write(f"{mount_path}/config/urls", **urls_config)
+        print("✓ CA URLs configured")
+    except Exception as e:
+        print(f"Warning: Failed to configure CA URLs: {e}")
+
+
+def process_issuer_details(client: hvac.Client, mount_path: str, issuer_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Process details for a single issuer.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: PKI mount path
+        issuer_id: Issuer ID to process
+        
+    Returns:
+        Issuer information dictionary or None if processing fails
+    """
+    try:
+        issuer_detail = client.read(f"{mount_path}/issuer/{issuer_id}")
+        if not issuer_detail or 'data' not in issuer_detail:
+            return None
+            
+        issuer_cert = issuer_detail['data'].get('certificate', '')
+        issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
+        
+        # Parse certificate details
+        cert_dates = parse_certificate_dates(issuer_cert)
+        common_name = extract_common_name_from_certificate(issuer_cert)
+        
+        return {
+            'id': issuer_id,
+            'name': issuer_name,
+            'certificate': issuer_cert,
+            'not_before': cert_dates['not_before'],
+            'not_after': cert_dates['not_after'],
+            'common_name': common_name
+        }
+    except Exception:
+        return None
+
+
+def get_ca_certificate_info(client: hvac.Client, mount_path: str) -> Dict[str, Any]:
+    """
+    Get CA certificate information for a PKI engine.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: PKI mount path
+        
+    Returns:
+        Dictionary with CA certificate info
+    """
+    try:
+        ca_cert_response = client.read(f"{mount_path}/cert/ca")
+        if ca_cert_response and 'data' in ca_cert_response:
+            cert_pem = ca_cert_response['data'].get('certificate', '')
+            cert_dates = parse_certificate_dates(cert_pem)
+            return {
+                'ca_certificate': cert_pem,
+                'cert_not_before': cert_dates['not_before'],
+                'cert_not_after': cert_dates['not_after']
+            }
+    except Exception:
+        pass
+    
+    return {
+        'ca_certificate': None,
+        'cert_not_before': None,
+        'cert_not_after': None
+    }
+
+
 def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> None:
     """
     Create a visual timeline showing certificate validity periods.
@@ -289,111 +437,60 @@ def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
     try:
         # List all mounted secrets engines
         mounts = client.sys.list_mounted_secrets_engines()
-        
         pki_engines = []
         
         for mount_path, mount_info in mounts['data'].items():
             # Check if the secrets engine type is 'pki'
-            if mount_info.get('type') == 'pki':
-                pki_info = {
-                    'path': mount_path.rstrip('/'),
-                    'type': mount_info.get('type'),
-                    'description': mount_info.get('description', ''),
-                    'config': mount_info.get('config', {}),
-                    'options': mount_info.get('options', {}),
-                    'accessor': mount_info.get('accessor', ''),
-                }
+            if mount_info.get('type') != 'pki':
+                continue
                 
-                # Try to get additional PKI-specific information
-                try:
-                    # Get CA certificate info if available
-                    ca_cert_response = client.read(f"{pki_info['path']}/cert/ca")
-                    if ca_cert_response and 'data' in ca_cert_response:
-                        cert_pem = ca_cert_response['data'].get('certificate', '')
-                        pki_info['ca_certificate'] = cert_pem
-                        
-                        # Parse certificate dates
-                        cert_dates = parse_certificate_dates(cert_pem)
-                        pki_info['cert_not_before'] = cert_dates['not_before']
-                        pki_info['cert_not_after'] = cert_dates['not_after']
-                    else:
-                        pki_info['ca_certificate'] = None
-                        pki_info['cert_not_before'] = None
-                        pki_info['cert_not_after'] = None
-                except Exception:
-                    # CA cert might not be configured yet
-                    pki_info['ca_certificate'] = None
-                    pki_info['cert_not_before'] = None
-                    pki_info['cert_not_after'] = None
-                
-                try:
-                    # Get PKI configuration
-                    config_response = client.read(f"{pki_info['path']}/config/ca")
-                    if config_response and 'data' in config_response:
-                        pki_info['ca_config'] = config_response['data']
-                except Exception:
-                    pki_info['ca_config'] = None
-                
-                try:
-                    # List certificate roles
-                    roles_response = client.list(f"{pki_info['path']}/roles")
-                    if roles_response and 'data' in roles_response:
-                        pki_info['roles'] = roles_response['data'].get('keys', [])
-                    else:
-                        pki_info['roles'] = []
-                except Exception:
-                    pki_info['roles'] = []
-                
-                try:
-                    # List all issuers (certificates) in this PKI engine
-                    issuers_response = client.list(f"{pki_info['path']}/issuers")
-                    if issuers_response and 'data' in issuers_response:
-                        issuer_ids = issuers_response['data'].get('keys', [])
-                        pki_info['issuers'] = []
-                        
-                        # Get details for each issuer
-                        for issuer_id in issuer_ids:
-                            try:
-                                issuer_detail = client.read(f"{pki_info['path']}/issuer/{issuer_id}")
-                                if issuer_detail and 'data' in issuer_detail:
-                                    issuer_cert = issuer_detail['data'].get('certificate', '')
-                                    issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
-                                    
-                                    # Parse certificate details
-                                    cert_dates = parse_certificate_dates(issuer_cert)
-                                    
-                                    issuer_info = {
-                                        'id': issuer_id,
-                                        'name': issuer_name,
-                                        'certificate': issuer_cert,
-                                        'not_before': cert_dates['not_before'],
-                                        'not_after': cert_dates['not_after']
-                                    }
-                                    
-                                    # Extract subject from certificate if possible
-                                    try:
-                                        if issuer_cert:
-                                            cert = x509.load_pem_x509_certificate(issuer_cert.encode(), default_backend())
-                                            subject = cert.subject
-                                            common_name = None
-                                            for attribute in subject:
-                                                if attribute.oid == x509.NameOID.COMMON_NAME:
-                                                    common_name = attribute.value
-                                                    break
-                                            issuer_info['common_name'] = common_name
-                                    except Exception:
-                                        issuer_info['common_name'] = None
-                                    
-                                    pki_info['issuers'].append(issuer_info)
-                            except Exception:
-                                # If we can't get details for this issuer, skip it
-                                continue
-                    else:
-                        pki_info['issuers'] = []
-                except Exception:
+            mount_path = mount_path.rstrip('/')
+            
+            # Build basic PKI info
+            pki_info = {
+                'path': mount_path,
+                'type': mount_info.get('type'),
+                'description': mount_info.get('description', ''),
+                'config': mount_info.get('config', {}),
+                'options': mount_info.get('options', {}),
+                'accessor': mount_info.get('accessor', ''),
+            }
+            
+            # Get CA certificate information
+            ca_info = get_ca_certificate_info(client, mount_path)
+            pki_info.update(ca_info)
+            
+            # Get PKI configuration
+            try:
+                config_response = client.read(f"{mount_path}/config/ca")
+                pki_info['ca_config'] = config_response['data'] if config_response else None
+            except Exception:
+                pki_info['ca_config'] = None
+            
+            # Get certificate roles
+            try:
+                roles_response = client.list(f"{mount_path}/roles")
+                pki_info['roles'] = roles_response['data'].get('keys', []) if roles_response else []
+            except Exception:
+                pki_info['roles'] = []
+            
+            # Get all issuers
+            try:
+                issuers_response = client.list(f"{mount_path}/issuers")
+                if issuers_response and 'data' in issuers_response:
+                    issuer_ids = issuers_response['data'].get('keys', [])
                     pki_info['issuers'] = []
-                
-                pki_engines.append(pki_info)
+                    
+                    for issuer_id in issuer_ids:
+                        issuer_info = process_issuer_details(client, mount_path, issuer_id)
+                        if issuer_info:
+                            pki_info['issuers'].append(issuer_info)
+                else:
+                    pki_info['issuers'] = []
+            except Exception:
+                pki_info['issuers'] = []
+            
+            pki_engines.append(pki_info)
         
         return pki_engines
         
@@ -520,31 +617,11 @@ def create_root_ca(client: hvac.Client, mount_path: str, common_name: str,
         Dictionary containing the root CA creation response
     """
     try:
-        # Ensure the mount path doesn't have trailing slash
         mount_path = mount_path.rstrip('/')
+        validate_pki_engine(client, mount_path)
         
-        # Check if PKI engine is mounted at the specified path
-        mounts = client.sys.list_mounted_secrets_engines()
-        if f"{mount_path}/" not in mounts['data']:
-            raise ValueError(f"No secrets engine mounted at '{mount_path}'. Please mount a PKI engine first.")
-        
-        if mounts['data'][f"{mount_path}/"].get('type') != 'pki':
-            raise ValueError(f"Secrets engine at '{mount_path}' is not a PKI engine.")
-        
-        # Prepare the root CA generation request
-        ca_data = {
-            'common_name': common_name,
-            'ttl': ttl,
-            'key_bits': key_bits,
-            'key_type': key_type,
-            'format': 'pem'
-        }
-        
-        # Add optional fields if provided
-        if country:
-            ca_data['country'] = country
-        if organization:
-            ca_data['organization'] = organization
+        # Build CA data
+        ca_data = build_ca_data(common_name, ttl, key_bits, key_type, country, organization)
         
         # Generate the root CA
         print(f"Creating root CA with common name: {common_name}")
@@ -557,17 +634,8 @@ def create_root_ca(client: hvac.Client, mount_path: str, common_name: str,
         if not response or 'data' not in response:
             raise Exception("Failed to generate root CA - no data returned")
         
-        # Configure the CA URLs (optional but recommended)
-        try:
-            vault_addr = os.getenv('VAULT_ADDR', 'http://localhost:8200')
-            urls_config = {
-                'issuing_certificates': f"{vault_addr}/v1/{mount_path}/ca",
-                'crl_distribution_points': f"{vault_addr}/v1/{mount_path}/crl"
-            }
-            client.write(f"{mount_path}/config/urls", **urls_config)
-            print("✓ CA URLs configured")
-        except Exception as e:
-            print(f"Warning: Failed to configure CA URLs: {e}")
+        # Configure the CA URLs
+        configure_ca_urls(client, mount_path)
         
         return {
             'success': True,
@@ -810,16 +878,8 @@ def set_default_issuer(client: hvac.Client, mount_path: str, issuer_id: str) -> 
         Dictionary containing the operation result
     """
     try:
-        # Ensure the mount path doesn't have trailing slash
         mount_path = mount_path.rstrip('/')
-        
-        # Check if PKI engine is mounted at the specified path
-        mounts = client.sys.list_mounted_secrets_engines()
-        if f"{mount_path}/" not in mounts['data']:
-            raise ValueError(f"No secrets engine mounted at '{mount_path}'. Please mount a PKI engine first.")
-        
-        if mounts['data'][f"{mount_path}/"].get('type') != 'pki':
-            raise ValueError(f"Secrets engine at '{mount_path}' is not a PKI engine.")
+        validate_pki_engine(client, mount_path)
         
         # Verify the issuer exists
         try:
@@ -832,35 +892,20 @@ def set_default_issuer(client: hvac.Client, mount_path: str, issuer_id: str) -> 
         print(f"Setting issuer '{issuer_id}' as default for PKI engine '{mount_path}'...")
         
         # Set the default issuer
-        config_data = {
-            'default': issuer_id
-        }
-        
-        response = client.write(f"{mount_path}/config/issuers", **config_data)
+        config_data = {'default': issuer_id}
+        client.write(f"{mount_path}/config/issuers", **config_data)
         
         # Get issuer details for confirmation
         issuer_cert = issuer_detail['data'].get('certificate', '')
         issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
-        
-        # Extract common name from certificate if possible
-        common_name = None
-        try:
-            if issuer_cert:
-                cert = x509.load_pem_x509_certificate(issuer_cert.encode(), default_backend())
-                subject = cert.subject
-                for attribute in subject:
-                    if attribute.oid == x509.NameOID.COMMON_NAME:
-                        common_name = attribute.value
-                        break
-        except Exception:
-            pass
+        common_name = extract_common_name_from_certificate(issuer_cert) or issuer_name
         
         return {
             'success': True,
             'mount_path': mount_path,
             'issuer_id': issuer_id,
             'issuer_name': issuer_name,
-            'common_name': common_name or issuer_name
+            'common_name': common_name
         }
         
     except Exception as e:
@@ -890,37 +935,12 @@ def list_issuers_for_selection(client: hvac.Client, mount_path: str) -> List[Dic
         issuers = []
         
         for issuer_id in issuer_ids:
-            try:
-                issuer_detail = client.read(f"{mount_path}/issuer/{issuer_id}")
-                if issuer_detail and 'data' in issuer_detail:
-                    issuer_cert = issuer_detail['data'].get('certificate', '')
-                    issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
-                    
-                    # Extract common name from certificate
-                    common_name = None
-                    try:
-                        if issuer_cert:
-                            cert = x509.load_pem_x509_certificate(issuer_cert.encode(), default_backend())
-                            subject = cert.subject
-                            for attribute in subject:
-                                if attribute.oid == x509.NameOID.COMMON_NAME:
-                                    common_name = attribute.value
-                                    break
-                    except Exception:
-                        pass
-                    
-                    # Parse certificate dates
-                    cert_dates = parse_certificate_dates(issuer_cert)
-                    
-                    issuers.append({
-                        'id': issuer_id,
-                        'name': issuer_name,
-                        'common_name': common_name or issuer_name,
-                        'not_before': cert_dates['not_before'],
-                        'not_after': cert_dates['not_after']
-                    })
-            except Exception:
-                continue
+            issuer_info = process_issuer_details(client, mount_path, issuer_id)
+            if issuer_info:
+                # Ensure we have the common_name for display
+                if not issuer_info.get('common_name'):
+                    issuer_info['common_name'] = issuer_info['name']
+                issuers.append(issuer_info)
         
         return issuers
         
