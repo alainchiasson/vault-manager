@@ -57,6 +57,141 @@ def parse_certificate_dates(cert_pem: str) -> Dict[str, Optional[datetime]]:
         return {'not_before': None, 'not_after': None}
 
 
+def create_timeline_visualization(pki_engines: List[Dict[str, Any]]) -> None:
+    """
+    Create a visual timeline showing certificate validity periods.
+    
+    Args:
+        pki_engines: List of PKI engine information dictionaries
+    """
+    import datetime as dt
+    
+    # Collect all certificates with their validity periods
+    certs = []
+    
+    for engine in pki_engines:
+        # Add main CA certificate if available
+        if engine.get('cert_not_before') and engine.get('cert_not_after'):
+            certs.append({
+                'name': f"{engine['path']} (Main CA)",
+                'not_before': engine['cert_not_before'],
+                'not_after': engine['cert_not_after'],
+                'engine_path': engine['path']
+            })
+        
+        # Add all issuers
+        for issuer in engine.get('issuers', []):
+            if issuer.get('not_before') and issuer.get('not_after'):
+                issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
+                certs.append({
+                    'name': f"{engine['path']}/{issuer_name}",
+                    'not_before': issuer['not_before'],
+                    'not_after': issuer['not_after'],
+                    'engine_path': engine['path']
+                })
+    
+    if not certs:
+        return
+    
+    # Normalize timezone for all certificates
+    for cert in certs:
+        if cert['not_before'].tzinfo is None:
+            cert['not_before'] = cert['not_before'].replace(tzinfo=dt.timezone.utc)
+        if cert['not_after'].tzinfo is None:
+            cert['not_after'] = cert['not_after'].replace(tzinfo=dt.timezone.utc)
+    
+    # Find the overall time range
+    all_start_dates = [cert['not_before'] for cert in certs]
+    all_end_dates = [cert['not_after'] for cert in certs]
+    
+    earliest_start = min(all_start_dates)
+    latest_end = max(all_end_dates)
+    
+    # Add some padding to the timeline
+    time_range = latest_end - earliest_start
+    padding = time_range * 0.05  # 5% padding on each side
+    timeline_start = earliest_start - padding
+    timeline_end = latest_end + padding
+    timeline_duration = timeline_end - timeline_start
+    
+    print(f"\n{'='*60}")
+    print("CERTIFICATE VALIDITY TIMELINE")
+    print(f"{'='*60}")
+    print(f"Timeline: {format_datetime(timeline_start)} to {format_datetime(timeline_end)}")
+    
+    # Current time marker
+    now = dt.datetime.now(dt.timezone.utc)
+    
+    # Timeline width in characters
+    timeline_width = 50
+    
+    print(f"\n{'Certificate Name':<30} {'Timeline':<{timeline_width}} {'Status'}")
+    print(f"{'-'*30} {'-'*timeline_width} {'-'*15}")
+    
+    for cert in sorted(certs, key=lambda x: x['not_before']):
+        # Calculate positions on the timeline
+        start_pos = int((cert['not_before'] - timeline_start) / timeline_duration * timeline_width)
+        end_pos = int((cert['not_after'] - timeline_start) / timeline_duration * timeline_width)
+        now_pos = int((now - timeline_start) / timeline_duration * timeline_width)
+        
+        # Ensure positions are within bounds
+        start_pos = max(0, min(start_pos, timeline_width - 1))
+        end_pos = max(0, min(end_pos, timeline_width - 1))
+        now_pos = max(0, min(now_pos, timeline_width - 1))
+        
+        # Create the timeline visualization
+        timeline = [' '] * timeline_width
+        
+        # Fill the validity period
+        for i in range(start_pos, min(end_pos + 1, timeline_width)):
+            timeline[i] = '█'
+        
+        # Mark start and end
+        if start_pos < timeline_width:
+            timeline[start_pos] = '├'
+        if end_pos < timeline_width and end_pos != start_pos:
+            timeline[end_pos] = '┤'
+        
+        # Mark current time
+        if 0 <= now_pos < timeline_width:
+            if timeline[now_pos] == '█':
+                timeline[now_pos] = '●'  # Current time within validity
+            else:
+                timeline[now_pos] = '│'  # Current time outside validity
+        
+        # Determine status
+        if now < cert['not_before']:
+            status = "Future"
+        elif now > cert['not_after']:
+            days_expired = (now - cert['not_after']).days
+            status = f"EXPIRED ({days_expired}d)"
+        else:
+            days_remaining = (cert['not_after'] - now).days
+            if days_remaining < 30:
+                status = f"⚠️ {days_remaining}d left"
+            elif days_remaining < 90:
+                status = f"⚡ {days_remaining}d left"
+            else:
+                status = f"✓ {days_remaining}d left"
+        
+        # Truncate certificate name if too long
+        cert_name = cert['name']
+        if len(cert_name) > 28:
+            cert_name = cert_name[:25] + "..."
+        
+        timeline_str = ''.join(timeline)
+        print(f"{cert_name:<30} {timeline_str:<{timeline_width}} {status}")
+    
+    # Legend
+    print(f"\n{'Legend:'}")
+    print(f"  ├{'█'*8}┤  Certificate validity period")
+    print(f"  ●        Current time (within validity)")
+    print(f"  │        Current time (outside validity)")
+    print(f"  ✓        Valid (>90 days remaining)")
+    print(f"  ⚡       Expires soon (30-90 days)")
+    print(f"  ⚠️        Critical (< 30 days)")
+
+
 def format_datetime(dt: Optional[datetime]) -> str:
     """
     Format datetime for display.
@@ -290,6 +425,9 @@ def print_pki_scan_results(pki_engines: List[Dict[str, Any]]) -> None:
             for key, value in engine['ca_config'].items():
                 if key != 'private_key':  # Don't print sensitive data
                     print(f"     {key}: {value}")
+    
+    # Add timeline visualization
+    create_timeline_visualization(pki_engines)
 
 
 def create_root_ca(client: hvac.Client, mount_path: str, common_name: str, 
@@ -589,6 +727,155 @@ def print_intermediate_ca_result(result: Dict[str, Any]) -> None:
         print(f"  You can now create certificate roles and issue certificates under '{result['mount_path']}'")
 
 
+def set_default_issuer(client: hvac.Client, mount_path: str, issuer_id: str) -> Dict[str, Any]:
+    """
+    Set an issuer as the default for a PKI secrets engine.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: Path where PKI engine is mounted
+        issuer_id: ID of the issuer to set as default
+        
+    Returns:
+        Dictionary containing the operation result
+    """
+    try:
+        # Ensure the mount path doesn't have trailing slash
+        mount_path = mount_path.rstrip('/')
+        
+        # Check if PKI engine is mounted at the specified path
+        mounts = client.sys.list_mounted_secrets_engines()
+        if f"{mount_path}/" not in mounts['data']:
+            raise ValueError(f"No secrets engine mounted at '{mount_path}'. Please mount a PKI engine first.")
+        
+        if mounts['data'][f"{mount_path}/"].get('type') != 'pki':
+            raise ValueError(f"Secrets engine at '{mount_path}' is not a PKI engine.")
+        
+        # Verify the issuer exists
+        try:
+            issuer_detail = client.read(f"{mount_path}/issuer/{issuer_id}")
+            if not issuer_detail or 'data' not in issuer_detail:
+                raise ValueError(f"Issuer '{issuer_id}' not found in PKI engine '{mount_path}'")
+        except Exception:
+            raise ValueError(f"Issuer '{issuer_id}' not found in PKI engine '{mount_path}'")
+        
+        print(f"Setting issuer '{issuer_id}' as default for PKI engine '{mount_path}'...")
+        
+        # Set the default issuer
+        config_data = {
+            'default': issuer_id
+        }
+        
+        response = client.write(f"{mount_path}/config/issuers", **config_data)
+        
+        # Get issuer details for confirmation
+        issuer_cert = issuer_detail['data'].get('certificate', '')
+        issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
+        
+        # Extract common name from certificate if possible
+        common_name = None
+        try:
+            if issuer_cert:
+                cert = x509.load_pem_x509_certificate(issuer_cert.encode(), default_backend())
+                subject = cert.subject
+                for attribute in subject:
+                    if attribute.oid == x509.NameOID.COMMON_NAME:
+                        common_name = attribute.value
+                        break
+        except Exception:
+            pass
+        
+        return {
+            'success': True,
+            'mount_path': mount_path,
+            'issuer_id': issuer_id,
+            'issuer_name': issuer_name,
+            'common_name': common_name or issuer_name
+        }
+        
+    except Exception as e:
+        raise Exception(f"Failed to set default issuer: {str(e)}")
+
+
+def list_issuers_for_selection(client: hvac.Client, mount_path: str) -> List[Dict[str, Any]]:
+    """
+    List all issuers in a PKI engine for user selection.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: Path where PKI engine is mounted
+        
+    Returns:
+        List of issuer information dictionaries
+    """
+    try:
+        mount_path = mount_path.rstrip('/')
+        
+        # List all issuers
+        issuers_response = client.list(f"{mount_path}/issuers")
+        if not issuers_response or 'data' not in issuers_response:
+            return []
+        
+        issuer_ids = issuers_response['data'].get('keys', [])
+        issuers = []
+        
+        for issuer_id in issuer_ids:
+            try:
+                issuer_detail = client.read(f"{mount_path}/issuer/{issuer_id}")
+                if issuer_detail and 'data' in issuer_detail:
+                    issuer_cert = issuer_detail['data'].get('certificate', '')
+                    issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
+                    
+                    # Extract common name from certificate
+                    common_name = None
+                    try:
+                        if issuer_cert:
+                            cert = x509.load_pem_x509_certificate(issuer_cert.encode(), default_backend())
+                            subject = cert.subject
+                            for attribute in subject:
+                                if attribute.oid == x509.NameOID.COMMON_NAME:
+                                    common_name = attribute.value
+                                    break
+                    except Exception:
+                        pass
+                    
+                    # Parse certificate dates
+                    cert_dates = parse_certificate_dates(issuer_cert)
+                    
+                    issuers.append({
+                        'id': issuer_id,
+                        'name': issuer_name,
+                        'common_name': common_name or issuer_name,
+                        'not_before': cert_dates['not_before'],
+                        'not_after': cert_dates['not_after']
+                    })
+            except Exception:
+                continue
+        
+        return issuers
+        
+    except Exception as e:
+        raise Exception(f"Failed to list issuers: {str(e)}")
+
+
+def print_set_default_issuer_result(result: Dict[str, Any]) -> None:
+    """
+    Print the set default issuer results in a formatted way.
+    
+    Args:
+        result: Set default issuer result dictionary
+    """
+    if result['success']:
+        print("\n" + "=" * 50)
+        print("DEFAULT ISSUER SET SUCCESSFULLY")
+        print("=" * 50)
+        print(f"PKI Engine: {result['mount_path']}")
+        print(f"Default Issuer: {result['common_name']}")
+        print(f"Issuer ID: {result['issuer_id']}")
+        print("\n✓ Default issuer updated!")
+        print(f"  New certificates will be issued by '{result['common_name']}' by default")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Vault PKI Manager")
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -618,6 +905,12 @@ def main():
     create_intermediate_parser.add_argument('--key-bits', type=int, default=2048, help='Key size in bits (default: 2048)')
     create_intermediate_parser.add_argument('--key-type', default='rsa', choices=['rsa', 'ec', 'ed25519'], help='Key type (default: rsa)')
     create_intermediate_parser.add_argument('--enable-engine', action='store_true', help='Enable PKI engine if not already mounted')
+    
+    # Set default issuer command
+    set_default_parser = subparsers.add_parser('set-default-issuer', help='Set an issuer as the default for a PKI engine')
+    set_default_parser.add_argument('--mount-path', required=True, help='PKI mount path (e.g., pki)')
+    set_default_parser.add_argument('--issuer-id', help='Issuer ID to set as default (if not provided, will list available issuers)')
+    set_default_parser.add_argument('--list-only', action='store_true', help='Only list available issuers without setting default')
     
     args = parser.parse_args()
     
@@ -679,6 +972,64 @@ def main():
                 key_type=args.key_type
             )
             print_intermediate_ca_result(result)
+            
+        elif args.command == 'set-default-issuer':
+            # List available issuers
+            print(f"\nListing issuers in PKI engine '{args.mount_path}'...")
+            issuers = list_issuers_for_selection(client, args.mount_path)
+            
+            if not issuers:
+                print("No issuers found in this PKI engine.")
+                return 1
+            
+            print(f"\nFound {len(issuers)} issuer(s):")
+            print("=" * 40)
+            for i, issuer in enumerate(issuers, 1):
+                print(f"{i}. {issuer['common_name']}")
+                print(f"   ID: {issuer['id']}")
+                if issuer.get('not_before') and issuer.get('not_after'):
+                    start_date = format_datetime(issuer['not_before'])
+                    end_date = format_datetime(issuer['not_after'])
+                    print(f"   Valid: {start_date} to {end_date}")
+                else:
+                    print(f"   Valid: Unknown")
+            
+            # If list-only flag is set, just show the list
+            if args.list_only:
+                return 0
+            
+            # If issuer-id is provided, use it; otherwise prompt for selection
+            if args.issuer_id:
+                # Verify the provided issuer ID exists
+                issuer_found = None
+                for issuer in issuers:
+                    if issuer['id'] == args.issuer_id:
+                        issuer_found = issuer
+                        break
+                
+                if not issuer_found:
+                    print(f"\nError: Issuer ID '{args.issuer_id}' not found.")
+                    print("Use --list-only to see available issuer IDs.")
+                    return 1
+                
+                selected_issuer_id = args.issuer_id
+            else:
+                # Interactive selection
+                try:
+                    choice = input(f"\nSelect issuer to set as default (1-{len(issuers)}): ")
+                    choice_num = int(choice)
+                    if 1 <= choice_num <= len(issuers):
+                        selected_issuer_id = issuers[choice_num - 1]['id']
+                    else:
+                        print("Invalid selection.")
+                        return 1
+                except (ValueError, KeyboardInterrupt):
+                    print("\nOperation cancelled.")
+                    return 1
+            
+            # Set the default issuer
+            result = set_default_issuer(client, args.mount_path, selected_issuer_id)
+            print_set_default_issuer_result(result)
         
     except Exception as e:
         print(f"Error: {e}")
