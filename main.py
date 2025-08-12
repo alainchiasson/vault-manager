@@ -57,12 +57,13 @@ def parse_certificate_dates(cert_pem: str) -> Dict[str, Optional[datetime]]:
         return {'not_before': None, 'not_after': None}
 
 
-def create_timeline_visualization(pki_engines: List[Dict[str, Any]]) -> None:
+def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> None:
     """
     Create a visual timeline showing certificate validity periods.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
+        timeline_width: Width of the timeline in characters (default: 50)
     """
     import datetime as dt
     
@@ -122,11 +123,11 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]]) -> None:
     # Current time marker
     now = dt.datetime.now(dt.timezone.utc)
     
-    # Timeline width in characters
-    timeline_width = 50
+    # Use the provided timeline width
+    # timeline_width = 50  # This line is now removed since it's a parameter
     
-    print(f"\n{'Certificate Name':<30} {'Timeline':<{timeline_width}} {'Status'}")
-    print(f"{'-'*30} {'-'*timeline_width} {'-'*15}")
+    print(f"\n{'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}")
+    print(f"{'-'*50} {'-'*timeline_width} {'-'*15}")
     
     for cert in sorted(certs, key=lambda x: x['not_before']):
         # Calculate positions on the timeline
@@ -176,11 +177,11 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]]) -> None:
         
         # Truncate certificate name if too long
         cert_name = cert['name']
-        if len(cert_name) > 28:
-            cert_name = cert_name[:25] + "..."
+        if len(cert_name) > 48:
+            cert_name = cert_name[:45] + "..."
         
         timeline_str = ''.join(timeline)
-        print(f"{cert_name:<30} {timeline_str:<{timeline_width}} {status}")
+        print(f"{cert_name:<50} {timeline_str:<{timeline_width}} {status}")
     
     # Legend
     print(f"\n{'Legend:'}")
@@ -332,12 +333,13 @@ def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
         raise Exception(f"Failed to scan for PKI secrets engines: {str(e)}")
 
 
-def print_pki_scan_results(pki_engines: List[Dict[str, Any]]) -> None:
+def print_pki_scan_results(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> None:
     """
     Print the PKI scan results in a formatted way.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
+        timeline_width: Width of the timeline visualization in characters
     """
     if not pki_engines:
         print("No PKI secrets engines found.")
@@ -427,7 +429,7 @@ def print_pki_scan_results(pki_engines: List[Dict[str, Any]]) -> None:
                     print(f"     {key}: {value}")
     
     # Add timeline visualization
-    create_timeline_visualization(pki_engines)
+    create_timeline_visualization(pki_engines, timeline_width)
 
 
 def create_root_ca(client: hvac.Client, mount_path: str, common_name: str, 
@@ -882,6 +884,8 @@ def main():
     
     # Scan command
     scan_parser = subparsers.add_parser('scan', help='Scan for PKI secrets engines')
+    scan_parser.add_argument('--wide', action='store_true', help='Use wide timeline (100 characters instead of 50)')
+    scan_parser.add_argument('--width', type=int, help='Custom timeline width in characters (overrides --wide)')
     
     # Create root CA command
     create_ca_parser = subparsers.add_parser('create-root-ca', help='Create a new root CA')
@@ -927,10 +931,17 @@ def main():
         print("✓ Successfully connected to Vault")
         
         if args.command == 'scan':
+            # Determine timeline width
+            timeline_width = 50  # default
+            if args.width:
+                timeline_width = args.width
+            elif args.wide:
+                timeline_width = 100
+            
             # Scan for PKI secrets engines
             print("\nScanning for PKI secrets engines...")
             pki_engines = scan_pki_secrets_engines(client)
-            print_pki_scan_results(pki_engines)
+            print_pki_scan_results(pki_engines, timeline_width)
             
         elif args.command == 'create-root-ca':
             # Enable PKI engine if requested
