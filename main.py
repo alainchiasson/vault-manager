@@ -67,29 +67,63 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
     """
     import datetime as dt
     
-    # Collect all certificates with their validity periods
+    # Collect all certificates with their validity periods and hierarchy info
     certs = []
+    ca_engines = {}  # Track CA engines for hierarchy mapping
     
     for engine in pki_engines:
         # Add main CA certificate if available
         if engine.get('cert_not_before') and engine.get('cert_not_after'):
-            certs.append({
+            cert_entry = {
                 'name': f"{engine['path']} (Main CA)",
                 'not_before': engine['cert_not_before'],
                 'not_after': engine['cert_not_after'],
-                'engine_path': engine['path']
-            })
+                'engine_path': engine['path'],
+                'cert_type': 'root_ca',
+                'parent_ca': None
+            }
+            certs.append(cert_entry)
+            ca_engines[engine['path']] = cert_entry
         
         # Add all issuers
         for issuer in engine.get('issuers', []):
             if issuer.get('not_before') and issuer.get('not_after'):
                 issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
-                certs.append({
+                
+                # Try to determine if this is an intermediate CA by checking if it's signed by another CA
+                # For now, assume issuers in different engines than main CAs are intermediates
+                is_intermediate = engine['path'] not in ca_engines or len(engine.get('issuers', [])) > 1
+                
+                cert_entry = {
                     'name': f"{engine['path']}/{issuer_name}",
                     'not_before': issuer['not_before'],
                     'not_after': issuer['not_after'],
-                    'engine_path': engine['path']
-                })
+                    'engine_path': engine['path'],
+                    'cert_type': 'intermediate' if is_intermediate else 'issuer',
+                    'parent_ca': None  # Will be determined below
+                }
+                certs.append(cert_entry)
+    
+    # Try to establish parent-child relationships for intermediate CAs
+    # Look for naming patterns that suggest hierarchy (e.g., pki-int signed by pki)
+    for cert in certs:
+        if cert['cert_type'] == 'intermediate':
+            # Look for a potential parent CA in a different engine with similar naming
+            cert_engine = cert['engine_path']
+            
+            # Common patterns: pki-int -> pki, pki-intermediate -> pki-root, etc.
+            potential_parents = []
+            for other_cert in certs:
+                if (other_cert['cert_type'] == 'root_ca' and 
+                    other_cert['engine_path'] != cert_engine):
+                    # Simple heuristic: if the intermediate engine name contains the root engine name
+                    if (other_cert['engine_path'] in cert_engine or 
+                        cert_engine.replace('-int', '').replace('-intermediate', '') == other_cert['engine_path']):
+                        potential_parents.append(other_cert)
+            
+            # If we found potential parents, pick the first one (could be made more sophisticated)
+            if potential_parents:
+                cert['parent_ca'] = potential_parents[0]['name']
     
     if not certs:
         return
@@ -129,7 +163,18 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
     print(f"\n{'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}")
     print(f"{'-'*50} {'-'*timeline_width} {'-'*15}")
     
-    for cert in sorted(certs, key=lambda x: x['not_before']):
+    # Sort certificates: root CAs first, then intermediates, then others
+    def sort_key(cert):
+        if cert['cert_type'] == 'root_ca':
+            return (0, cert['not_before'])
+        elif cert['cert_type'] == 'intermediate':
+            return (1, cert['not_before'])
+        else:
+            return (2, cert['not_before'])
+    
+    sorted_certs = sorted(certs, key=sort_key)
+    
+    for i, cert in enumerate(sorted_certs):
         # Calculate positions on the timeline
         start_pos = int((cert['not_before'] - timeline_start) / timeline_duration * timeline_width)
         end_pos = int((cert['not_after'] - timeline_start) / timeline_duration * timeline_width)
@@ -180,11 +225,34 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
         if len(cert_name) > 48:
             cert_name = cert_name[:45] + "..."
         
+        # Add hierarchy indicator for intermediate CAs
+        if cert['cert_type'] == 'intermediate' and cert['parent_ca']:
+            cert_name = f"  ↳ {cert_name}"  # Indent and add arrow for intermediate
+        elif cert['cert_type'] == 'root_ca':
+            cert_name = f"📜 {cert_name}"  # Add certificate icon for root CA
+        
         timeline_str = ''.join(timeline)
         print(f"{cert_name:<50} {timeline_str:<{timeline_width}} {status}")
+        
+        # Print connection line for intermediate CAs
+        if cert['cert_type'] == 'intermediate' and cert['parent_ca'] and i > 0:
+            # Find the parent CA in our sorted list
+            parent_index = None
+            for j, parent_cert in enumerate(sorted_certs[:i]):
+                if parent_cert['name'] == cert['parent_ca']:
+                    parent_index = j
+                    break
+            
+            if parent_index is not None:
+                # Create a visual connection line
+                connection_line = "  │" + " " * 47 + " " * timeline_width + " " * 15
+                print(connection_line)
     
     # Legend
     print(f"\n{'Legend:'}")
+    print(f"  📜       Root CA certificate")
+    print(f"  ↳        Intermediate CA (signed by parent)")
+    print(f"  │        Hierarchy connection")
     print(f"  ├{'█'*8}┤  Certificate validity period")
     print(f"  ●        Current time (within validity)")
     print(f"  │        Current time (outside validity)")
