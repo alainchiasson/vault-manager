@@ -946,6 +946,170 @@ def print_set_default_issuer_result(result: Dict[str, Any]) -> None:
         print(f"  New certificates will be issued by '{result['common_name']}' by default")
 
 
+def rotate_root_ca(client: hvac.Client, mount_path: str, common_name: str,
+                   country: Optional[str] = None, organization: Optional[str] = None,
+                   ttl: str = "17520h", key_bits: int = 2048, key_type: str = "rsa") -> Dict[str, Any]:
+    """
+    Create a new root CA certificate alongside existing ones (dual root setup).
+    This allows for gradual migration without breaking existing certificates.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: Path where PKI engine is mounted (e.g., 'pki')
+        common_name: Common name for the new root CA certificate
+        country: Country code (e.g., 'US')
+        organization: Organization name
+        ttl: Time to live for the certificate (default: 17520h = 2 years)
+        key_bits: Number of bits for the key (default: 2048)
+        key_type: Type of key to generate (rsa, ec, ed25519)
+        
+    Returns:
+        Dictionary containing the root CA rotation response
+    """
+    try:
+        # Ensure the mount path doesn't have trailing slash
+        mount_path = mount_path.rstrip('/')
+        
+        # Check if PKI engine is mounted at the specified path
+        mounts = client.sys.list_mounted_secrets_engines()
+        if f"{mount_path}/" not in mounts['data']:
+            raise ValueError(f"No secrets engine mounted at '{mount_path}'. Please mount a PKI engine first.")
+        
+        if mounts['data'][f"{mount_path}/"].get('type') != 'pki':
+            raise ValueError(f"Secrets engine at '{mount_path}' is not a PKI engine.")
+        
+        # Get current issuers to show what exists
+        print(f"Checking existing issuers in PKI engine '{mount_path}'...")
+        existing_issuers = list_issuers_for_selection(client, mount_path)
+        
+        if existing_issuers:
+            print(f"Found {len(existing_issuers)} existing issuer(s):")
+            for i, issuer in enumerate(existing_issuers, 1):
+                print(f"  {i}. {issuer['common_name']} (ID: {issuer['id']})")
+        else:
+            print("No existing issuers found.")
+        
+        # Prepare the new root CA generation request
+        ca_data = {
+            'common_name': common_name,
+            'ttl': ttl,
+            'key_bits': key_bits,
+            'key_type': key_type,
+            'format': 'pem'
+        }
+        
+        # Add optional fields if provided
+        if country:
+            ca_data['country'] = country
+        if organization:
+            ca_data['organization'] = organization
+        
+        # Generate the new root CA (this will add it alongside existing ones)
+        print(f"\nCreating new root CA with common name: {common_name}")
+        print(f"Mount path: {mount_path}")
+        print(f"TTL: {ttl}")
+        print(f"Key type: {key_type} ({key_bits} bits)")
+        print("⚠️  This will create a NEW root CA alongside existing ones")
+        print("✓ Existing certificates will remain valid")
+        
+        response = client.write(f"{mount_path}/root/generate/internal", **ca_data)
+        
+        if not response or 'data' not in response:
+            raise Exception("Failed to generate new root CA - no data returned")
+        
+        new_issuer_id = response['data'].get('issuer_id')
+        certificate = response['data'].get('certificate')
+        serial_number = response['data'].get('serial_number')
+        
+        # Configure the CA URLs (optional but recommended)
+        try:
+            vault_addr = os.getenv('VAULT_ADDR', 'http://localhost:8200')
+            urls_config = {
+                'issuing_certificates': f"{vault_addr}/v1/{mount_path}/ca",
+                'crl_distribution_points': f"{vault_addr}/v1/{mount_path}/crl"
+            }
+            client.write(f"{mount_path}/config/urls", **urls_config)
+            print("✓ CA URLs configured")
+        except Exception as e:
+            print(f"Warning: Failed to configure CA URLs: {e}")
+        
+        # Set the new issuer as default if it's the only one or if user confirms
+        should_set_default = False
+        if not existing_issuers:
+            should_set_default = True
+            print("✓ Setting new root CA as default (no existing issuers)")
+        else:
+            try:
+                choice = input(f"\nSet new root CA '{common_name}' as default? (y/N): ").lower().strip()
+                should_set_default = choice in ['y', 'yes']
+            except (KeyboardInterrupt, EOFError):
+                print("\nSkipping default issuer setting.")
+        
+        if should_set_default and new_issuer_id:
+            try:
+                set_default_result = set_default_issuer(client, mount_path, new_issuer_id)
+                if set_default_result['success']:
+                    print(f"✓ New root CA set as default issuer")
+            except Exception as e:
+                print(f"Warning: Failed to set new root CA as default: {e}")
+        
+        return {
+            'success': True,
+            'certificate': certificate,
+            'issuer_id': new_issuer_id,
+            'serial_number': serial_number,
+            'mount_path': mount_path,
+            'common_name': common_name,
+            'existing_issuers_count': len(existing_issuers),
+            'is_default': should_set_default
+        }
+        
+    except Exception as e:
+        raise Exception(f"Failed to rotate root CA: {str(e)}")
+
+
+def print_root_ca_rotation_result(result: Dict[str, Any]) -> None:
+    """
+    Print the root CA rotation results in a formatted way.
+    
+    Args:
+        result: Root CA rotation result dictionary
+    """
+    if result['success']:
+        print("\n" + "=" * 60)
+        print("ROOT CA ROTATION COMPLETED SUCCESSFULLY")
+        print("=" * 60)
+        print(f"Mount Path: {result['mount_path']}")
+        print(f"New Root CA: {result['common_name']}")
+        print(f"Serial Number: {result['serial_number']}")
+        print(f"Issuer ID: {result['issuer_id']}")
+        
+        if result['existing_issuers_count'] > 0:
+            print(f"Existing Issuers: {result['existing_issuers_count']} (still valid)")
+            print("📋 DUAL ROOT SETUP ACTIVE")
+            print("   • Old certificates remain valid under previous root(s)")
+            print("   • New certificates can be issued under new root")
+            print("   • Gradual migration is now possible")
+        else:
+            print("📋 FIRST ROOT CA CREATED")
+        
+        if result['is_default']:
+            print(f"✓ New root CA is set as DEFAULT issuer")
+        else:
+            print(f"⚠️  New root CA is NOT set as default")
+            print(f"   Use 'set-default-issuer' command to change default if needed")
+        
+        if result['certificate']:
+            print(f"\nNew Root CA Certificate:")
+            print(result['certificate'])
+        
+        print("\n🚀 NEXT STEPS:")
+        print("1. Run 'scan' command to see the updated PKI hierarchy")
+        print("2. Create new intermediate CAs using the new root CA")
+        print("3. Gradually migrate applications to use new certificates")
+        print("4. Eventually retire old root CA when all certificates have migrated")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Vault PKI Manager")
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -983,6 +1147,16 @@ def main():
     set_default_parser.add_argument('--mount-path', required=True, help='PKI mount path (e.g., pki)')
     set_default_parser.add_argument('--issuer-id', help='Issuer ID to set as default (if not provided, will list available issuers)')
     set_default_parser.add_argument('--list-only', action='store_true', help='Only list available issuers without setting default')
+    
+    # Rotate root CA command
+    rotate_ca_parser = subparsers.add_parser('rotate-root-ca', help='Create a new root CA alongside existing ones (dual root setup)')
+    rotate_ca_parser.add_argument('--mount-path', required=True, help='PKI mount path (e.g., pki)')
+    rotate_ca_parser.add_argument('--common-name', required=True, help='Common name for the new root CA')
+    rotate_ca_parser.add_argument('--country', help='Country code (e.g., US)')
+    rotate_ca_parser.add_argument('--organization', help='Organization name')
+    rotate_ca_parser.add_argument('--ttl', default='17520h', help='Certificate TTL (default: 17520h = 2 years)')
+    rotate_ca_parser.add_argument('--key-bits', type=int, default=2048, help='Key size in bits (default: 2048)')
+    rotate_ca_parser.add_argument('--key-type', default='rsa', choices=['rsa', 'ec', 'ed25519'], help='Key type (default: rsa)')
     
     args = parser.parse_args()
     
@@ -1109,6 +1283,33 @@ def main():
             # Set the default issuer
             result = set_default_issuer(client, args.mount_path, selected_issuer_id)
             print_set_default_issuer_result(result)
+            
+        elif args.command == 'rotate-root-ca':
+            # Rotate root CA (create new root alongside existing ones)
+            print(f"\nRotating root CA at '{args.mount_path}'...")
+            print("This will create a NEW root CA alongside existing certificates.")
+            print("Existing certificates will remain valid during transition.\n")
+            
+            try:
+                confirmation = input("Continue with root CA rotation? (y/N): ").lower().strip()
+                if confirmation not in ['y', 'yes']:
+                    print("Root CA rotation cancelled.")
+                    return 0
+            except (KeyboardInterrupt, EOFError):
+                print("\nRoot CA rotation cancelled.")
+                return 0
+            
+            result = rotate_root_ca(
+                client=client,
+                mount_path=args.mount_path,
+                common_name=args.common_name,
+                country=args.country,
+                organization=args.organization,
+                ttl=args.ttl,
+                key_bits=args.key_bits,
+                key_type=args.key_type
+            )
+            print_root_ca_rotation_result(result)
         
     except Exception as e:
         print(f"Error: {e}")
