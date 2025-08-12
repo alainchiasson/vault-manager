@@ -5,10 +5,7 @@ import os
 from typing import Dict, Any, Optional
 
 # Import helper functions from ca_helpers
-from ca_helpers import configure_ca_urls
-
-# Import PKI engine management from root_ca_operations
-from root_ca_operations import enable_pki_engine
+from ca_helpers import configure_ca_urls, enable_pki_engine
 
 
 def create_intermediate_ca(client: hvac.Client, mount_path: str, common_name: str,

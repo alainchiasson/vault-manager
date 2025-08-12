@@ -115,6 +115,45 @@ def configure_ca_urls(client: hvac.Client, mount_path: str) -> None:
         print(f"Warning: Failed to configure CA URLs: {e}")
 
 
+def enable_pki_engine(client: hvac.Client, mount_path: str, max_lease_ttl: str = "8760h") -> bool:
+    """
+    Enable a new PKI secrets engine at the specified path.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: Path to mount the PKI engine
+        max_lease_ttl: Maximum lease TTL for the engine
+        
+    Returns:
+        True if successful
+    """
+    try:
+        mount_path = mount_path.rstrip('/')
+        
+        # Check if already mounted
+        mounts = client.sys.list_mounted_secrets_engines()
+        if f"{mount_path}/" in mounts['data']:
+            engine_type = mounts['data'][f"{mount_path}/"].get('type')
+            if engine_type == 'pki':
+                print(f"PKI engine already mounted at '{mount_path}'")
+                return True
+            else:
+                raise ValueError(f"Path '{mount_path}' already has a {engine_type} engine mounted")
+        
+        # Mount the PKI engine
+        client.sys.enable_secrets_engine(
+            backend_type='pki',
+            path=mount_path,
+            config={'max_lease_ttl': max_lease_ttl}
+        )
+        
+        print(f"✓ PKI secrets engine enabled at '{mount_path}'")
+        return True
+        
+    except Exception as e:
+        raise Exception(f"Failed to enable PKI engine: {str(e)}")
+
+
 def process_issuer_details(client: hvac.Client, mount_path: str, issuer_id: str) -> Optional[Dict[str, Any]]:
     """
     Process details for a single issuer.

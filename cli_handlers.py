@@ -12,7 +12,6 @@ from main import (
 
 # Import root CA operations from root_ca_operations module
 from root_ca_operations import (
-    enable_pki_engine,
     create_root_ca,
     print_root_ca_result,
     rotate_root_ca,
@@ -24,6 +23,9 @@ from intermediate_ca_operations import (
     create_intermediate_ca,
     print_intermediate_ca_result
 )
+
+# Import common CA helper functions
+from ca_helpers import enable_pki_engine
 
 # Import scan functions from scan_functions module
 from scan_functions import scan_pki_secrets_engines, print_pki_scan_results
