@@ -1258,6 +1258,225 @@ def calculate_expiry_status(cert_expiry: datetime) -> str:
         return f"✓ Valid ({days_until_expiry} days remaining)"
 
 
+def handle_scan_command(client: hvac.Client, args) -> int:
+    """
+    Handle the scan command execution.
+    
+    Args:
+        client: Authenticated Vault client
+        args: Parsed command line arguments
+        
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        # Determine timeline width
+        timeline_width = 50  # default
+        if args.width:
+            timeline_width = args.width
+        elif args.wide:
+            timeline_width = 100
+        
+        # Scan for PKI secrets engines
+        print("\nScanning for PKI secrets engines...")
+        pki_engines = scan_pki_secrets_engines(client)
+        print_pki_scan_results(pki_engines, timeline_width)
+        return 0
+    except Exception as e:
+        print(f"Error during scan: {e}")
+        return 1
+
+
+def handle_create_root_ca_command(client: hvac.Client, args) -> int:
+    """
+    Handle the create-root-ca command execution.
+    
+    Args:
+        client: Authenticated Vault client
+        args: Parsed command line arguments
+        
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        # Enable PKI engine if requested
+        if args.enable_engine:
+            print(f"\nEnabling PKI secrets engine at '{args.mount_path}'...")
+            enable_pki_engine(client, args.mount_path)
+        
+        # Create root CA
+        print(f"\nCreating root CA at '{args.mount_path}'...")
+        result = create_root_ca(
+            client=client,
+            mount_path=args.mount_path,
+            common_name=args.common_name,
+            country=args.country,
+            organization=args.organization,
+            ttl=args.ttl,
+            key_bits=args.key_bits,
+            key_type=args.key_type
+        )
+        print_root_ca_result(result)
+        return 0
+    except Exception as e:
+        print(f"Error creating root CA: {e}")
+        return 1
+
+
+def handle_create_intermediate_ca_command(client: hvac.Client, args) -> int:
+    """
+    Handle the create-intermediate-ca command execution.
+    
+    Args:
+        client: Authenticated Vault client
+        args: Parsed command line arguments
+        
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        # Enable PKI engine if requested
+        if args.enable_engine:
+            print(f"\nEnabling PKI secrets engine at '{args.mount_path}'...")
+            enable_pki_engine(client, args.mount_path)
+        
+        # Create intermediate CA
+        print(f"\nCreating intermediate CA at '{args.mount_path}'...")
+        result = create_intermediate_ca(
+            client=client,
+            mount_path=args.mount_path,
+            common_name=args.common_name,
+            signing_ca_path=args.signing_ca_path,
+            country=args.country,
+            organization=args.organization,
+            ttl=args.ttl,
+            key_bits=args.key_bits,
+            key_type=args.key_type
+        )
+        print_intermediate_ca_result(result)
+        return 0
+    except Exception as e:
+        print(f"Error creating intermediate CA: {e}")
+        return 1
+
+
+def handle_set_default_issuer_command(client: hvac.Client, args) -> int:
+    """
+    Handle the set-default-issuer command execution.
+    
+    Args:
+        client: Authenticated Vault client
+        args: Parsed command line arguments
+        
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        # List available issuers
+        print(f"\nListing issuers in PKI engine '{args.mount_path}'...")
+        issuers = list_issuers_for_selection(client, args.mount_path)
+        
+        if not issuers:
+            print("No issuers found in this PKI engine.")
+            return 1
+        
+        print(f"\nFound {len(issuers)} issuer(s):")
+        print("=" * 40)
+        for i, issuer in enumerate(issuers, 1):
+            print(f"{i}. {issuer['common_name']}")
+            print(f"   ID: {issuer['id']}")
+            if issuer.get('not_before') and issuer.get('not_after'):
+                start_date = format_datetime(issuer['not_before'])
+                end_date = format_datetime(issuer['not_after'])
+                print(f"   Valid: {start_date} to {end_date}")
+            else:
+                print(f"   Valid: Unknown")
+        
+        # If list-only flag is set, just show the list
+        if args.list_only:
+            return 0
+        
+        # If issuer-id is provided, use it; otherwise prompt for selection
+        if args.issuer_id:
+            # Verify the provided issuer ID exists
+            issuer_found = None
+            for issuer in issuers:
+                if issuer['id'] == args.issuer_id:
+                    issuer_found = issuer
+                    break
+            
+            if not issuer_found:
+                print(f"\nError: Issuer ID '{args.issuer_id}' not found.")
+                print("Use --list-only to see available issuer IDs.")
+                return 1
+            
+            selected_issuer_id = args.issuer_id
+        else:
+            # Interactive selection
+            try:
+                choice = input(f"\nSelect issuer to set as default (1-{len(issuers)}): ")
+                choice_num = int(choice)
+                if 1 <= choice_num <= len(issuers):
+                    selected_issuer_id = issuers[choice_num - 1]['id']
+                else:
+                    print("Invalid selection.")
+                    return 1
+            except (ValueError, KeyboardInterrupt):
+                print("\nOperation cancelled.")
+                return 1
+        
+        # Set the default issuer
+        result = set_default_issuer(client, args.mount_path, selected_issuer_id)
+        print_set_default_issuer_result(result)
+        return 0
+    except Exception as e:
+        print(f"Error setting default issuer: {e}")
+        return 1
+
+
+def handle_rotate_root_ca_command(client: hvac.Client, args) -> int:
+    """
+    Handle the rotate-root-ca command execution.
+    
+    Args:
+        client: Authenticated Vault client
+        args: Parsed command line arguments
+        
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        # Rotate root CA (create new root alongside existing ones)
+        print(f"\nRotating root CA at '{args.mount_path}'...")
+        print("This will create a NEW root CA alongside existing certificates.")
+        print("Existing certificates will remain valid during transition.\n")
+        
+        try:
+            confirmation = input("Continue with root CA rotation? (y/N): ").lower().strip()
+            if confirmation not in ['y', 'yes']:
+                print("Root CA rotation cancelled.")
+                return 0
+        except (KeyboardInterrupt, EOFError):
+            print("\nRoot CA rotation cancelled.")
+            return 0
+        
+        result = rotate_root_ca(
+            client=client,
+            mount_path=args.mount_path,
+            common_name=args.common_name,
+            country=args.country,
+            organization=args.organization,
+            ttl=args.ttl,
+            key_bits=args.key_bits,
+            key_type=args.key_type
+        )
+        print_root_ca_rotation_result(result)
+        return 0
+    except Exception as e:
+        print(f"Error rotating root CA: {e}")
+        return 1
+
+
 def main():
     parser = create_argument_parser()
     args = parser.parse_args()
@@ -1269,155 +1488,32 @@ def main():
     print("Vault PKI Manager")
     print("=" * 20)
     
+    # Command mapping dictionary
+    command_handlers = {
+        'scan': handle_scan_command,
+        'create-root-ca': handle_create_root_ca_command,
+        'create-intermediate-ca': handle_create_intermediate_ca_command,
+        'set-default-issuer': handle_set_default_issuer_command,
+        'rotate-root-ca': handle_rotate_root_ca_command
+    }
+    
     try:
         # Get Vault client
         client = get_vault_client()
         print("✓ Successfully connected to Vault")
         
-        if args.command == 'scan':
-            # Determine timeline width
-            timeline_width = 50  # default
-            if args.width:
-                timeline_width = args.width
-            elif args.wide:
-                timeline_width = 100
-            
-            # Scan for PKI secrets engines
-            print("\nScanning for PKI secrets engines...")
-            pki_engines = scan_pki_secrets_engines(client)
-            print_pki_scan_results(pki_engines, timeline_width)
-            
-        elif args.command == 'create-root-ca':
-            # Enable PKI engine if requested
-            if args.enable_engine:
-                print(f"\nEnabling PKI secrets engine at '{args.mount_path}'...")
-                enable_pki_engine(client, args.mount_path)
-            
-            # Create root CA
-            print(f"\nCreating root CA at '{args.mount_path}'...")
-            result = create_root_ca(
-                client=client,
-                mount_path=args.mount_path,
-                common_name=args.common_name,
-                country=args.country,
-                organization=args.organization,
-                ttl=args.ttl,
-                key_bits=args.key_bits,
-                key_type=args.key_type
-            )
-            print_root_ca_result(result)
-            
-        elif args.command == 'create-intermediate-ca':
-            # Enable PKI engine if requested
-            if args.enable_engine:
-                print(f"\nEnabling PKI secrets engine at '{args.mount_path}'...")
-                enable_pki_engine(client, args.mount_path)
-            
-            # Create intermediate CA
-            print(f"\nCreating intermediate CA at '{args.mount_path}'...")
-            result = create_intermediate_ca(
-                client=client,
-                mount_path=args.mount_path,
-                common_name=args.common_name,
-                signing_ca_path=args.signing_ca_path,
-                country=args.country,
-                organization=args.organization,
-                ttl=args.ttl,
-                key_bits=args.key_bits,
-                key_type=args.key_type
-            )
-            print_intermediate_ca_result(result)
-            
-        elif args.command == 'set-default-issuer':
-            # List available issuers
-            print(f"\nListing issuers in PKI engine '{args.mount_path}'...")
-            issuers = list_issuers_for_selection(client, args.mount_path)
-            
-            if not issuers:
-                print("No issuers found in this PKI engine.")
-                return 1
-            
-            print(f"\nFound {len(issuers)} issuer(s):")
-            print("=" * 40)
-            for i, issuer in enumerate(issuers, 1):
-                print(f"{i}. {issuer['common_name']}")
-                print(f"   ID: {issuer['id']}")
-                if issuer.get('not_before') and issuer.get('not_after'):
-                    start_date = format_datetime(issuer['not_before'])
-                    end_date = format_datetime(issuer['not_after'])
-                    print(f"   Valid: {start_date} to {end_date}")
-                else:
-                    print(f"   Valid: Unknown")
-            
-            # If list-only flag is set, just show the list
-            if args.list_only:
-                return 0
-            
-            # If issuer-id is provided, use it; otherwise prompt for selection
-            if args.issuer_id:
-                # Verify the provided issuer ID exists
-                issuer_found = None
-                for issuer in issuers:
-                    if issuer['id'] == args.issuer_id:
-                        issuer_found = issuer
-                        break
-                
-                if not issuer_found:
-                    print(f"\nError: Issuer ID '{args.issuer_id}' not found.")
-                    print("Use --list-only to see available issuer IDs.")
-                    return 1
-                
-                selected_issuer_id = args.issuer_id
-            else:
-                # Interactive selection
-                try:
-                    choice = input(f"\nSelect issuer to set as default (1-{len(issuers)}): ")
-                    choice_num = int(choice)
-                    if 1 <= choice_num <= len(issuers):
-                        selected_issuer_id = issuers[choice_num - 1]['id']
-                    else:
-                        print("Invalid selection.")
-                        return 1
-                except (ValueError, KeyboardInterrupt):
-                    print("\nOperation cancelled.")
-                    return 1
-            
-            # Set the default issuer
-            result = set_default_issuer(client, args.mount_path, selected_issuer_id)
-            print_set_default_issuer_result(result)
-            
-        elif args.command == 'rotate-root-ca':
-            # Rotate root CA (create new root alongside existing ones)
-            print(f"\nRotating root CA at '{args.mount_path}'...")
-            print("This will create a NEW root CA alongside existing certificates.")
-            print("Existing certificates will remain valid during transition.\n")
-            
-            try:
-                confirmation = input("Continue with root CA rotation? (y/N): ").lower().strip()
-                if confirmation not in ['y', 'yes']:
-                    print("Root CA rotation cancelled.")
-                    return 0
-            except (KeyboardInterrupt, EOFError):
-                print("\nRoot CA rotation cancelled.")
-                return 0
-            
-            result = rotate_root_ca(
-                client=client,
-                mount_path=args.mount_path,
-                common_name=args.common_name,
-                country=args.country,
-                organization=args.organization,
-                ttl=args.ttl,
-                key_bits=args.key_bits,
-                key_type=args.key_type
-            )
-            print_root_ca_rotation_result(result)
+        # Execute the appropriate command handler
+        handler = command_handlers.get(args.command)
+        if handler:
+            return handler(client, args)
+        else:
+            print(f"Unknown command: {args.command}")
+            parser.print_help()
+            return 1
         
     except Exception as e:
         print(f"Error: {e}")
         return 1
-    
-    return 0
 
 
 if __name__ == "__main__":
