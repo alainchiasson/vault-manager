@@ -5,20 +5,23 @@ from typing import Dict, Any
 
 # Import the core functions from main
 from main import (
-    scan_pki_secrets_engines,
-    print_pki_scan_results,
     enable_pki_engine,
     create_root_ca,
     print_root_ca_result,
     create_intermediate_ca,
     print_intermediate_ca_result,
     list_issuers_for_selection,
-    format_datetime,
     set_default_issuer,
     print_set_default_issuer_result,
     rotate_root_ca,
     print_root_ca_rotation_result
 )
+
+# Import scan functions from scan_functions module
+from scan_functions import scan_pki_secrets_engines, print_pki_scan_results
+
+# Import utility functions
+from utils import format_datetime
 
 
 def setup_scan_parser(subparsers):
