@@ -6,10 +6,14 @@ from typing import Dict, Any, Optional
 
 # Import helper functions from main
 from main import (
-    validate_pki_engine,
-    configure_ca_urls,
     list_issuers_for_selection,
     set_default_issuer
+)
+
+# Import common CA helper functions
+from ca_helpers import (
+    validate_pki_engine,
+    configure_ca_urls
 )
 
 
