@@ -49,8 +49,8 @@ def parse_certificate_dates(cert_pem: str) -> Dict[str, Optional[datetime]]:
         cert = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
         
         return {
-            'not_before': cert.not_valid_before,
-            'not_after': cert.not_valid_after
+            'not_before': cert.not_valid_before_utc,
+            'not_after': cert.not_valid_after_utc
         }
     except Exception:
         # If we can't parse the certificate, return None values
