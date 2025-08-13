@@ -229,7 +229,7 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
     return '\n'.join(output_lines)
 
 
-def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
+def scan_pki_secrets_engines(client: hvac.Client) -> Dict[str, Any]:
     """
     Scan Vault for PKI secrets engines.
     
@@ -237,9 +237,18 @@ def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
         client: Authenticated Vault client
         
     Returns:
-        List of dictionaries containing PKI engine information
+        Dictionary containing vault info and PKI engine information
     """
     try:
+        # Check if this is Vault Enterprise
+        try:
+            sys_health = client.sys.read_health_status()
+            version_info = sys_health.get('version', '')
+            is_enterprise = '+ent' in version_info or 'enterprise' in version_info.lower()
+        except Exception:
+            version_info = 'Unknown'
+            is_enterprise = False
+        
         # List all mounted secrets engines
         mounts = client.sys.list_mounted_secrets_engines()
         pki_engines = []
@@ -259,6 +268,7 @@ def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
                 'config': mount_info.get('config', {}),
                 'options': mount_info.get('options', {}),
                 'accessor': mount_info.get('accessor', ''),
+                'is_enterprise': is_enterprise,
             }
             
             # Get CA certificate information
@@ -297,28 +307,49 @@ def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
             
             pki_engines.append(pki_info)
         
-        return pki_engines
+        return {
+            'vault_version': version_info,
+            'is_enterprise': is_enterprise,
+            'pki_engines': pki_engines
+        }
         
     except Exception as e:
         raise Exception(f"Failed to scan for PKI secrets engines: {str(e)}")
 
 
-def print_pki_scan_results(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> str:
+def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) -> str:
     """
     Format the PKI scan results as a string.
     
     Args:
-        pki_engines: List of PKI engine information dictionaries
+        scan_data: Dictionary containing vault info and PKI engine information
         timeline_width: Width of the timeline visualization in characters
         
     Returns:
         Formatted string containing the scan results
     """
-    if not pki_engines:
-        return "No PKI secrets engines found."
+    # Extract data from the scan results
+    vault_version = scan_data.get('vault_version', 'Unknown')
+    is_enterprise = scan_data.get('is_enterprise', False)
+    pki_engines = scan_data.get('pki_engines', [])
     
     output_lines = []
-    output_lines.append(f"Found {len(pki_engines)} PKI secrets engine(s):")
+    
+    # Display vault information
+    output_lines.append("VAULT INFORMATION")
+    output_lines.append("=" * 20)
+    output_lines.append(f"Version: {vault_version}")
+    if is_enterprise:
+        output_lines.append("Edition: ✓ Vault Enterprise")
+    else:
+        output_lines.append("Edition: ℹ️ Vault Open Source")
+    
+    # Display PKI engines information
+    if not pki_engines:
+        output_lines.append("\nNo PKI secrets engines found.")
+        return '\n'.join(output_lines)
+    
+    output_lines.append(f"\nFound {len(pki_engines)} PKI secrets engine(s):")
     output_lines.append("=" * 50)
     
     for i, engine in enumerate(pki_engines, 1):

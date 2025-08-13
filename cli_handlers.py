@@ -125,8 +125,8 @@ def handle_scan_command(client: hvac.Client, args) -> int:
         
         # Scan for PKI secrets engines
         print("\nScanning for PKI secrets engines...")
-        pki_engines = scan_pki_secrets_engines(client)
-        scan_results = print_pki_scan_results(pki_engines, timeline_width)
+        scan_data = scan_pki_secrets_engines(client)
+        scan_results = print_pki_scan_results(scan_data, timeline_width)
         print(scan_results)
         return 0
     except Exception as e:
