@@ -11,6 +11,8 @@ from ca_helpers import (
     set_default_issuer
 )
 
+from cli_handlers import create_argument_parser, get_command_handlers
+
 
 def get_vault_client() -> hvac.Client:
     """
@@ -37,8 +39,6 @@ def get_vault_client() -> hvac.Client:
 
 
 def main():
-    from cli_handlers import create_argument_parser, get_command_handlers
-    
     parser = create_argument_parser()
     args = parser.parse_args()
     

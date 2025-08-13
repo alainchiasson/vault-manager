@@ -11,8 +11,7 @@ from ca_helpers import (
     extract_common_name_from_certificate,
     process_issuer_details,
     list_issuers_for_selection,
-    set_default_issuer
-)
+    set_default_issuer,
     get_ca_certificate_info
 )
 
@@ -20,13 +19,16 @@ from ca_helpers import (
 from utils import format_datetime
 
 
-def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> None:
+def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> str:
     """
     Create a visual timeline showing certificate validity periods.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
         timeline_width: Width of the timeline in characters (default: 50)
+        
+    Returns:
+        Formatted string containing the timeline visualization
     """
     
     # Collect all certificates with their validity periods and hierarchy info
@@ -88,7 +90,7 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
                 cert['parent_ca'] = potential_parents[0]['name']
     
     if not certs:
-        return
+        return ""
     
     # Normalize timezone for all certificates
     for cert in certs:
@@ -111,10 +113,12 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
     timeline_end = latest_end + padding
     timeline_duration = timeline_end - timeline_start
     
-    print(f"\n{'='*60}")
-    print("CERTIFICATE VALIDITY TIMELINE")
-    print(f"{'='*60}")
-    print(f"Timeline: {format_datetime(timeline_start)} to {format_datetime(timeline_end)}")
+    # Build the timeline visualization string
+    output_lines = []
+    output_lines.append(f"\n{'='*60}")
+    output_lines.append("CERTIFICATE VALIDITY TIMELINE")
+    output_lines.append(f"{'='*60}")
+    output_lines.append(f"Timeline: {format_datetime(timeline_start)} to {format_datetime(timeline_end)}")
     
     # Current time marker
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -122,8 +126,8 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
     # Use the provided timeline width
     # timeline_width = 50  # This line is now removed since it's a parameter
     
-    print(f"\n{'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}")
-    print(f"{'-'*50} {'-'*timeline_width} {'-'*15}")
+    output_lines.append(f"\n{'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}")
+    output_lines.append(f"{'-'*50} {'-'*timeline_width} {'-'*15}")
     
     # Sort certificates: root CAs first, then intermediates, then others
     def sort_key(cert):
@@ -194,7 +198,7 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
             cert_name = f"📜 {cert_name}"  # Add certificate icon for root CA
         
         timeline_str = ''.join(timeline)
-        print(f"{cert_name:<50} {timeline_str:<{timeline_width}} {status}")
+        output_lines.append(f"{cert_name:<50} {timeline_str:<{timeline_width}} {status}")
         
         # Print connection line for intermediate CAs
         if cert['cert_type'] == 'intermediate' and cert['parent_ca'] and i > 0:
@@ -208,19 +212,21 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
             if parent_index is not None:
                 # Create a visual connection line
                 connection_line = "  │" + " " * 47 + " " * timeline_width + " " * 15
-                print(connection_line)
+                output_lines.append(connection_line)
     
     # Legend
-    print(f"\n{'Legend:'}")
-    print(f"  📜       Root CA certificate")
-    print(f"  ↳        Intermediate CA (signed by parent)")
-    print(f"  │        Hierarchy connection")
-    print(f"  ├{'█'*8}┤  Certificate validity period")
-    print(f"  ●        Current time (within validity)")
-    print(f"  │        Current time (outside validity)")
-    print(f"  ✓        Valid (>90 days remaining)")
-    print(f"  ⚡       Expires soon (30-90 days)")
-    print(f"  ⚠️        Critical (< 30 days)")
+    output_lines.append(f"\n{'Legend:'}")
+    output_lines.append(f"  📜       Root CA certificate")
+    output_lines.append(f"  ↳        Intermediate CA (signed by parent)")
+    output_lines.append(f"  │        Hierarchy connection")
+    output_lines.append(f"  ├{'█'*8}┤  Certificate validity period")
+    output_lines.append(f"  ●        Current time (within validity)")
+    output_lines.append(f"  │        Current time (outside validity)")
+    output_lines.append(f"  ✓        Valid (>90 days remaining)")
+    output_lines.append(f"  ⚡       Expires soon (30-90 days)")
+    output_lines.append(f"  ⚠️        Critical (< 30 days)")
+    
+    return '\n'.join(output_lines)
 
 
 def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
@@ -297,34 +303,37 @@ def scan_pki_secrets_engines(client: hvac.Client) -> List[Dict[str, Any]]:
         raise Exception(f"Failed to scan for PKI secrets engines: {str(e)}")
 
 
-def print_pki_scan_results(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> None:
+def print_pki_scan_results(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> str:
     """
-    Print the PKI scan results in a formatted way.
+    Format the PKI scan results as a string.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
         timeline_width: Width of the timeline visualization in characters
+        
+    Returns:
+        Formatted string containing the scan results
     """
     if not pki_engines:
-        print("No PKI secrets engines found.")
-        return
+        return "No PKI secrets engines found."
     
-    print(f"Found {len(pki_engines)} PKI secrets engine(s):")
-    print("=" * 50)
+    output_lines = []
+    output_lines.append(f"Found {len(pki_engines)} PKI secrets engine(s):")
+    output_lines.append("=" * 50)
     
     for i, engine in enumerate(pki_engines, 1):
-        print(f"\n{i}. PKI Engine: {engine['path']}")
-        print(f"   Description: {engine['description'] or 'No description'}")
-        print(f"   Accessor: {engine['accessor']}")
+        output_lines.append(f"\n{i}. PKI Engine: {engine['path']}")
+        output_lines.append(f"   Description: {engine['description'] or 'No description'}")
+        output_lines.append(f"   Accessor: {engine['accessor']}")
         
         if engine['ca_certificate']:
-            print("   ✓ CA Certificate configured")
+            output_lines.append("   ✓ CA Certificate configured")
             
             # Display certificate validity period
             start_date = format_datetime(engine.get('cert_not_before'))
             end_date = format_datetime(engine.get('cert_not_after'))
-            print(f"   Valid from: {start_date}")
-            print(f"   Valid until: {end_date}")
+            output_lines.append(f"   Valid from: {start_date}")
+            output_lines.append(f"   Valid until: {end_date}")
             
             # Check if certificate is expired or expiring soon
             if engine.get('cert_not_after'):
@@ -341,31 +350,31 @@ def print_pki_scan_results(pki_engines: List[Dict[str, Any]], timeline_width: in
                 days_until_expiry = (cert_expiry - now).days
                 
                 if days_until_expiry < 0:
-                    print(f"   ⚠️  EXPIRED {abs(days_until_expiry)} days ago")
+                    output_lines.append(f"   ⚠️  EXPIRED {abs(days_until_expiry)} days ago")
                 elif days_until_expiry < 30:
-                    print(f"   ⚠️  Expires in {days_until_expiry} days")
+                    output_lines.append(f"   ⚠️  Expires in {days_until_expiry} days")
                 elif days_until_expiry < 90:
-                    print(f"   ⚡ Expires in {days_until_expiry} days")
+                    output_lines.append(f"   ⚡ Expires in {days_until_expiry} days")
         else:
-            print("   ✗ CA Certificate not configured")
+            output_lines.append("   ✗ CA Certificate not configured")
         
         if engine['roles']:
-            print(f"   Roles: {', '.join(engine['roles'])}")
+            output_lines.append(f"   Roles: {', '.join(engine['roles'])}")
         else:
-            print("   Roles: None configured")
+            output_lines.append("   Roles: None configured")
         
         # Display issuers information
         if engine.get('issuers'):
-            print(f"   Issuers: {len(engine['issuers'])} certificate(s)")
+            output_lines.append(f"   Issuers: {len(engine['issuers'])} certificate(s)")
             for j, issuer in enumerate(engine['issuers'], 1):
                 issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
-                print(f"     {j}. {issuer_name}")
-                print(f"        ID: {issuer['id']}")
+                output_lines.append(f"     {j}. {issuer_name}")
+                output_lines.append(f"        ID: {issuer['id']}")
                 
                 if issuer.get('not_before') and issuer.get('not_after'):
                     start_date = format_datetime(issuer['not_before'])
                     end_date = format_datetime(issuer['not_after'])
-                    print(f"        Valid: {start_date} to {end_date}")
+                    output_lines.append(f"        Valid: {start_date} to {end_date}")
                     
                     # Check expiration status for this issuer
                     cert_expiry = issuer['not_after']
@@ -376,21 +385,25 @@ def print_pki_scan_results(pki_engines: List[Dict[str, Any]], timeline_width: in
                     days_until_expiry = (cert_expiry - now).days
                     
                     if days_until_expiry < 0:
-                        print(f"        ⚠️  EXPIRED {abs(days_until_expiry)} days ago")
+                        output_lines.append(f"        ⚠️  EXPIRED {abs(days_until_expiry)} days ago")
                     elif days_until_expiry < 30:
-                        print(f"        ⚠️  Expires in {days_until_expiry} days")
+                        output_lines.append(f"        ⚠️  Expires in {days_until_expiry} days")
                     elif days_until_expiry < 90:
-                        print(f"        ⚡ Expires in {days_until_expiry} days")
+                        output_lines.append(f"        ⚡ Expires in {days_until_expiry} days")
                 else:
-                    print(f"        Valid: Unknown")
+                    output_lines.append(f"        Valid: Unknown")
         else:
-            print("   Issuers: None found")
+            output_lines.append("   Issuers: None found")
         
         if engine['ca_config']:
-            print("   CA Configuration:")
+            output_lines.append("   CA Configuration:")
             for key, value in engine['ca_config'].items():
                 if key != 'private_key':  # Don't print sensitive data
-                    print(f"     {key}: {value}")
+                    output_lines.append(f"     {key}: {value}")
     
     # Add timeline visualization
-    create_timeline_visualization(pki_engines, timeline_width)
+    timeline_output = create_timeline_visualization(pki_engines, timeline_width)
+    if timeline_output:
+        output_lines.append(timeline_output)
+    
+    return '\n'.join(output_lines)
