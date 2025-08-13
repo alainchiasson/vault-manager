@@ -40,6 +40,7 @@ def setup_scan_parser(subparsers):
     scan_parser = subparsers.add_parser('scan', help='Scan for PKI secrets engines')
     scan_parser.add_argument('--wide', action='store_true', help='Use wide timeline (100 characters instead of 50)')
     scan_parser.add_argument('--width', type=int, help='Custom timeline width in characters (overrides --wide)')
+    scan_parser.add_argument('--namespace', help='Vault namespace to scan (Enterprise feature)')
 
 
 def setup_create_root_ca_parser(subparsers):
@@ -116,6 +117,11 @@ def handle_scan_command(client: hvac.Client, args) -> int:
         Exit code (0 for success, 1 for error)
     """
     try:
+        # Set namespace if provided
+        if args.namespace:
+            print(f"Setting namespace to: {args.namespace}")
+            client.adapter.namespace = args.namespace
+        
         # Determine timeline width
         timeline_width = 50  # default
         if args.width:

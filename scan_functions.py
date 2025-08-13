@@ -240,6 +240,9 @@ def scan_pki_secrets_engines(client: hvac.Client) -> Dict[str, Any]:
         Dictionary containing vault info and PKI engine information
     """
     try:
+        # Get current namespace (if any)
+        current_namespace = getattr(client.adapter, 'namespace', None) or 'root'
+        
         # Check if this is Vault Enterprise
         try:
             sys_health = client.sys.read_health_status()
@@ -310,6 +313,7 @@ def scan_pki_secrets_engines(client: hvac.Client) -> Dict[str, Any]:
         return {
             'vault_version': version_info,
             'is_enterprise': is_enterprise,
+            'namespace': current_namespace,
             'pki_engines': pki_engines
         }
         
@@ -331,6 +335,7 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
     # Extract data from the scan results
     vault_version = scan_data.get('vault_version', 'Unknown')
     is_enterprise = scan_data.get('is_enterprise', False)
+    namespace = scan_data.get('namespace', 'root')
     pki_engines = scan_data.get('pki_engines', [])
     
     output_lines = []
@@ -341,8 +346,11 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
     output_lines.append(f"Version: {vault_version}")
     if is_enterprise:
         output_lines.append("Edition: ✓ Vault Enterprise")
+        output_lines.append(f"Namespace: {namespace}")
     else:
         output_lines.append("Edition: ℹ️ Vault Open Source")
+        if namespace != 'root':
+            output_lines.append(f"Namespace: {namespace} (Note: Namespaces are Enterprise feature)")
     
     # Display PKI engines information
     if not pki_engines:
