@@ -36,60 +36,6 @@ def get_vault_client() -> hvac.Client:
     return client
 
 
-def list_issuers_for_selection(client: hvac.Client, mount_path: str) -> List[Dict[str, Any]]:
-    """
-    List all issuers in a PKI engine for user selection.
-    
-    Args:
-        client: Authenticated Vault client
-        mount_path: Path where PKI engine is mounted
-        
-    Returns:
-        List of issuer information dictionaries
-    """
-    try:
-        mount_path = mount_path.rstrip('/')
-        
-        # List all issuers
-        issuers_response = client.list(f"{mount_path}/issuers")
-        if not issuers_response or 'data' not in issuers_response:
-            return []
-        
-        issuer_ids = issuers_response['data'].get('keys', [])
-        issuers = []
-        
-        for issuer_id in issuer_ids:
-            issuer_info = process_issuer_details(client, mount_path, issuer_id)
-            if issuer_info:
-                # Ensure we have the common_name for display
-                if not issuer_info.get('common_name'):
-                    issuer_info['common_name'] = issuer_info['name']
-                issuers.append(issuer_info)
-        
-        return issuers
-        
-    except Exception as e:
-        raise Exception(f"Failed to list issuers: {str(e)}")
-
-
-def print_set_default_issuer_result(result: Dict[str, Any]) -> None:
-    """
-    Print the set default issuer results in a formatted way.
-    
-    Args:
-        result: Set default issuer result dictionary
-    """
-    if result['success']:
-        print("\n" + "=" * 50)
-        print("DEFAULT ISSUER SET SUCCESSFULLY")
-        print("=" * 50)
-        print(f"PKI Engine: {result['mount_path']}")
-        print(f"Default Issuer: {result['common_name']}")
-        print(f"Issuer ID: {result['issuer_id']}")
-        print("\n✓ Default issuer updated!")
-        print(f"  New certificates will be issued by '{result['common_name']}' by default")
-
-
 def main():
     from cli_handlers import create_argument_parser, get_command_handlers
     

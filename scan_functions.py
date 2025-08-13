@@ -3,16 +3,16 @@ import datetime
 from typing import List, Dict, Any, Optional
 
 # Import helper functions from main
-from main import (
-    list_issuers_for_selection,
-    set_default_issuer
-)
+# (none currently needed)
 
 # Import common CA helper functions
 from ca_helpers import (
     parse_certificate_dates,
     extract_common_name_from_certificate,
     process_issuer_details,
+    list_issuers_for_selection,
+    set_default_issuer
+)
     get_ca_certificate_info
 )
 

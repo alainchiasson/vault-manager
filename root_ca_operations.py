@@ -5,16 +5,15 @@ import os
 from typing import Dict, Any, Optional
 
 # Import helper functions from main
-from main import (
-    list_issuers_for_selection
-)
+# (none currently needed)
 
 # Import common CA helper functions
 from ca_helpers import (
     validate_pki_engine,
     configure_ca_urls,
     enable_pki_engine,
-    set_default_issuer
+    set_default_issuer,
+    list_issuers_for_selection
 )
 
 

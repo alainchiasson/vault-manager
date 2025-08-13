@@ -4,10 +4,7 @@ import datetime
 from typing import Dict, Any
 
 # Import the core functions from main
-from main import (
-    list_issuers_for_selection,
-    print_set_default_issuer_result
-)
+# (none currently needed)
 
 # Import root CA operations from root_ca_operations module
 from root_ca_operations import (
@@ -24,7 +21,12 @@ from intermediate_ca_operations import (
 )
 
 # Import common CA helper functions
-from ca_helpers import enable_pki_engine, set_default_issuer
+from ca_helpers import (
+    enable_pki_engine, 
+    set_default_issuer,
+    list_issuers_for_selection,
+    print_set_default_issuer_result
+)
 
 # Import scan functions from scan_functions module
 from scan_functions import scan_pki_secrets_engines, print_pki_scan_results
