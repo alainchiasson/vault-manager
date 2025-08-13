@@ -219,3 +219,50 @@ def get_ca_certificate_info(client: hvac.Client, mount_path: str) -> Dict[str, A
         'cert_not_before': None,
         'cert_not_after': None
     }
+
+
+def set_default_issuer(client: hvac.Client, mount_path: str, issuer_id: str) -> Dict[str, Any]:
+    """
+    Set an issuer as the default for a PKI secrets engine.
+    
+    Args:
+        client: Authenticated Vault client
+        mount_path: Path where PKI engine is mounted
+        issuer_id: ID of the issuer to set as default
+        
+    Returns:
+        Dictionary containing the operation result
+    """
+    try:
+        mount_path = mount_path.rstrip('/')
+        validate_pki_engine(client, mount_path)
+        
+        # Verify the issuer exists
+        try:
+            issuer_detail = client.read(f"{mount_path}/issuer/{issuer_id}")
+            if not issuer_detail or 'data' not in issuer_detail:
+                raise ValueError(f"Issuer '{issuer_id}' not found in PKI engine '{mount_path}'")
+        except Exception:
+            raise ValueError(f"Issuer '{issuer_id}' not found in PKI engine '{mount_path}'")
+        
+        print(f"Setting issuer '{issuer_id}' as default for PKI engine '{mount_path}'...")
+        
+        # Set the default issuer
+        config_data = {'default': issuer_id}
+        client.write(f"{mount_path}/config/issuers", **config_data)
+        
+        # Get issuer details for confirmation
+        issuer_cert = issuer_detail['data'].get('certificate', '')
+        issuer_name = issuer_detail['data'].get('issuer_name', issuer_id)
+        common_name = extract_common_name_from_certificate(issuer_cert) or issuer_name
+        
+        return {
+            'success': True,
+            'mount_path': mount_path,
+            'issuer_id': issuer_id,
+            'issuer_name': issuer_name,
+            'common_name': common_name
+        }
+        
+    except Exception as e:
+        raise Exception(f"Failed to set default issuer: {str(e)}")

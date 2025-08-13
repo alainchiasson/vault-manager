@@ -6,7 +6,6 @@ from typing import Dict, Any
 # Import the core functions from main
 from main import (
     list_issuers_for_selection,
-    set_default_issuer,
     print_set_default_issuer_result
 )
 
@@ -25,7 +24,7 @@ from intermediate_ca_operations import (
 )
 
 # Import common CA helper functions
-from ca_helpers import enable_pki_engine
+from ca_helpers import enable_pki_engine, set_default_issuer
 
 # Import scan functions from scan_functions module
 from scan_functions import scan_pki_secrets_engines, print_pki_scan_results
