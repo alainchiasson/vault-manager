@@ -41,6 +41,7 @@ def setup_scan_parser(subparsers):
     scan_parser.add_argument('--wide', action='store_true', help='Use wide timeline (100 characters instead of 50)')
     scan_parser.add_argument('--width', type=int, help='Custom timeline width in characters (overrides --wide)')
     scan_parser.add_argument('--namespace', help='Vault namespace to scan (Enterprise feature)')
+    scan_parser.add_argument('--all-namespaces', action='store_true', help='Scan all namespaces (Enterprise feature, overrides --namespace)')
 
 
 def setup_create_root_ca_parser(subparsers):
@@ -117,11 +118,6 @@ def handle_scan_command(client: hvac.Client, args) -> int:
         Exit code (0 for success, 1 for error)
     """
     try:
-        # Set namespace if provided
-        if args.namespace:
-            print(f"Setting namespace to: {args.namespace}")
-            client.adapter.namespace = args.namespace
-        
         # Determine timeline width
         timeline_width = 50  # default
         if args.width:
@@ -129,9 +125,18 @@ def handle_scan_command(client: hvac.Client, args) -> int:
         elif args.wide:
             timeline_width = 100
         
-        # Scan for PKI secrets engines
-        print("\nScanning for PKI secrets engines...")
-        scan_data = scan_pki_secrets_engines(client)
+        # Handle namespace options
+        if args.all_namespaces:
+            print("Scanning all namespaces...")
+            scan_data = scan_pki_secrets_engines(client, all_namespaces=True)
+        elif args.namespace:
+            print(f"Setting namespace to: {args.namespace}")
+            client.adapter.namespace = args.namespace
+            scan_data = scan_pki_secrets_engines(client, all_namespaces=False)
+        else:
+            print("\nScanning for PKI secrets engines...")
+            scan_data = scan_pki_secrets_engines(client, all_namespaces=False)
+        
         scan_results = print_pki_scan_results(scan_data, timeline_width)
         print(scan_results)
         return 0

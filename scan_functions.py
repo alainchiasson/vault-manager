@@ -19,13 +19,14 @@ from ca_helpers import (
 from utils import format_datetime
 
 
-def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_width: int = 50) -> str:
+def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
     """
     Create a visual timeline showing certificate validity periods.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
         timeline_width: Width of the timeline in characters (default: 50)
+        all_namespaces: Whether this is an all-namespaces scan
         
     Returns:
         Formatted string containing the timeline visualization
@@ -38,11 +39,18 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
     for engine in pki_engines:
         # Add main CA certificate if available
         if engine.get('cert_not_before') and engine.get('cert_not_after'):
+            engine_namespace = engine.get('namespace', 'root')
+            if all_namespaces and engine_namespace != 'root':
+                cert_name = f"{engine_namespace}::{engine['path']} (Main CA)"
+            else:
+                cert_name = f"{engine['path']} (Main CA)"
+            
             cert_entry = {
-                'name': f"{engine['path']} (Main CA)",
+                'name': cert_name,
                 'not_before': engine['cert_not_before'],
                 'not_after': engine['cert_not_after'],
                 'engine_path': engine['path'],
+                'namespace': engine_namespace,
                 'cert_type': 'root_ca',
                 'parent_ca': None
             }
@@ -53,16 +61,23 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
         for issuer in engine.get('issuers', []):
             if issuer.get('not_before') and issuer.get('not_after'):
                 issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
+                engine_namespace = engine.get('namespace', 'root')
                 
                 # Try to determine if this is an intermediate CA by checking if it's signed by another CA
                 # For now, assume issuers in different engines than main CAs are intermediates
                 is_intermediate = engine['path'] not in ca_engines or len(engine.get('issuers', [])) > 1
                 
+                if all_namespaces and engine_namespace != 'root':
+                    full_name = f"{engine_namespace}::{engine['path']}/{issuer_name}"
+                else:
+                    full_name = f"{engine['path']}/{issuer_name}"
+                
                 cert_entry = {
-                    'name': f"{engine['path']}/{issuer_name}",
+                    'name': full_name,
                     'not_before': issuer['not_before'],
                     'not_after': issuer['not_after'],
                     'engine_path': engine['path'],
+                    'namespace': engine_namespace,
                     'cert_type': 'intermediate' if is_intermediate else 'issuer',
                     'parent_ca': None  # Will be determined below
                 }
@@ -229,20 +244,18 @@ def create_timeline_visualization(pki_engines: List[Dict[str, Any]], timeline_wi
     return '\n'.join(output_lines)
 
 
-def scan_pki_secrets_engines(client: hvac.Client) -> Dict[str, Any]:
+def scan_pki_secrets_engines(client: hvac.Client, all_namespaces: bool = False) -> Dict[str, Any]:
     """
     Scan Vault for PKI secrets engines.
     
     Args:
         client: Authenticated Vault client
+        all_namespaces: If True, scan all namespaces (Enterprise feature)
         
     Returns:
         Dictionary containing vault info and PKI engine information
     """
     try:
-        # Get current namespace (if any)
-        current_namespace = getattr(client.adapter, 'namespace', None) or 'root'
-        
         # Check if this is Vault Enterprise
         try:
             sys_health = client.sys.read_health_status()
@@ -252,6 +265,113 @@ def scan_pki_secrets_engines(client: hvac.Client) -> Dict[str, Any]:
             version_info = 'Unknown'
             is_enterprise = False
         
+        if all_namespaces and not is_enterprise:
+            raise Exception("All namespaces scan requires Vault Enterprise")
+        
+        # Store original namespace
+        original_namespace = getattr(client.adapter, 'namespace', None)
+        
+        if all_namespaces:
+            # Get list of all namespaces
+            namespaces_to_scan = _get_all_namespaces(client)
+            print(f"Found {len(namespaces_to_scan)} namespace(s) to scan: {', '.join(namespaces_to_scan)}")
+        else:
+            # Get current namespace (if any)
+            current_namespace = original_namespace or 'root'
+            namespaces_to_scan = [current_namespace]
+        
+        all_pki_engines = []
+        scanned_namespaces = []
+        
+        # Scan each namespace
+        for namespace in namespaces_to_scan:
+            try:
+                # Set the namespace
+                if namespace != 'root':
+                    client.adapter.namespace = namespace
+                else:
+                    client.adapter.namespace = None
+                
+                print(f"  Scanning namespace: {namespace}")
+                
+                # Scan PKI engines in this namespace
+                namespace_engines = _scan_pki_in_namespace(client, namespace, is_enterprise)
+                all_pki_engines.extend(namespace_engines)
+                scanned_namespaces.append(namespace)
+                
+            except Exception as e:
+                print(f"  ⚠️ Error scanning namespace '{namespace}': {e}")
+                continue
+        
+        # Restore original namespace
+        client.adapter.namespace = original_namespace
+        
+        return {
+            'vault_version': version_info,
+            'is_enterprise': is_enterprise,
+            'scanned_namespaces': scanned_namespaces,
+            'all_namespaces_scan': all_namespaces,
+            'pki_engines': all_pki_engines
+        }
+        
+    except Exception as e:
+        # Restore original namespace on error
+        if 'original_namespace' in locals():
+            client.adapter.namespace = original_namespace
+        raise Exception(f"Failed to scan for PKI secrets engines: {str(e)}")
+
+
+def _get_all_namespaces(client: hvac.Client) -> List[str]:
+    """
+    Get list of all available namespaces.
+    
+    Args:
+        client: Authenticated Vault client
+        
+    Returns:
+        List of namespace names
+    """
+    try:
+        # Reset to root namespace to list all namespaces
+        original_namespace = getattr(client.adapter, 'namespace', None)
+        client.adapter.namespace = None
+        
+        # List namespaces
+        namespaces_response = client.sys.list_namespaces()
+        namespace_keys = namespaces_response.get('data', {}).get('keys', [])
+        
+        # Start with root namespace
+        namespaces = ['root']
+        
+        # Add other namespaces (remove trailing slashes)
+        for ns in namespace_keys:
+            ns_clean = ns.rstrip('/')
+            if ns_clean and ns_clean != 'root':
+                namespaces.append(ns_clean)
+        
+        # Restore original namespace
+        client.adapter.namespace = original_namespace
+        
+        return namespaces
+    except Exception as e:
+        # Restore original namespace on error
+        client.adapter.namespace = original_namespace
+        raise Exception(f"Failed to list namespaces: {str(e)}")
+
+
+def _scan_pki_in_namespace(client: hvac.Client, namespace: str, is_enterprise: bool) -> List[Dict[str, Any]]:
+    """
+    Scan PKI engines in a specific namespace.
+    
+    Args:
+        client: Authenticated Vault client
+        namespace: Namespace to scan
+        is_enterprise: Whether this is Vault Enterprise
+        
+    Returns:
+        List of PKI engine information dictionaries
+    """
+    try:
         # List all mounted secrets engines
         mounts = client.sys.list_mounted_secrets_engines()
         pki_engines = []
@@ -266,6 +386,7 @@ def scan_pki_secrets_engines(client: hvac.Client) -> Dict[str, Any]:
             # Build basic PKI info
             pki_info = {
                 'path': mount_path,
+                'namespace': namespace,
                 'type': mount_info.get('type'),
                 'description': mount_info.get('description', ''),
                 'config': mount_info.get('config', {}),
@@ -310,15 +431,10 @@ def scan_pki_secrets_engines(client: hvac.Client) -> Dict[str, Any]:
             
             pki_engines.append(pki_info)
         
-        return {
-            'vault_version': version_info,
-            'is_enterprise': is_enterprise,
-            'namespace': current_namespace,
-            'pki_engines': pki_engines
-        }
+        return pki_engines
         
     except Exception as e:
-        raise Exception(f"Failed to scan for PKI secrets engines: {str(e)}")
+        raise Exception(f"Failed to scan PKI engines in namespace '{namespace}': {str(e)}")
 
 
 def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) -> str:
@@ -335,7 +451,8 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
     # Extract data from the scan results
     vault_version = scan_data.get('vault_version', 'Unknown')
     is_enterprise = scan_data.get('is_enterprise', False)
-    namespace = scan_data.get('namespace', 'root')
+    scanned_namespaces = scan_data.get('scanned_namespaces', ['root'])
+    all_namespaces_scan = scan_data.get('all_namespaces_scan', False)
     pki_engines = scan_data.get('pki_engines', [])
     
     output_lines = []
@@ -346,11 +463,14 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
     output_lines.append(f"Version: {vault_version}")
     if is_enterprise:
         output_lines.append("Edition: ✓ Vault Enterprise")
-        output_lines.append(f"Namespace: {namespace}")
+        if all_namespaces_scan:
+            output_lines.append(f"Scanned Namespaces: {', '.join(scanned_namespaces)} ({len(scanned_namespaces)} total)")
+        else:
+            output_lines.append(f"Namespace: {scanned_namespaces[0] if scanned_namespaces else 'root'}")
     else:
         output_lines.append("Edition: ℹ️ Vault Open Source")
-        if namespace != 'root':
-            output_lines.append(f"Namespace: {namespace} (Note: Namespaces are Enterprise feature)")
+        if len(scanned_namespaces) > 1 or (scanned_namespaces and scanned_namespaces[0] != 'root'):
+            output_lines.append(f"Namespace: {scanned_namespaces[0] if scanned_namespaces else 'root'} (Note: Namespaces are Enterprise feature)")
     
     # Display PKI engines information
     if not pki_engines:
@@ -361,7 +481,12 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
     output_lines.append("=" * 50)
     
     for i, engine in enumerate(pki_engines, 1):
-        output_lines.append(f"\n{i}. PKI Engine: {engine['path']}")
+        # Show namespace if scanning multiple namespaces or not in root
+        engine_namespace = engine.get('namespace', 'root')
+        if all_namespaces_scan or engine_namespace != 'root':
+            output_lines.append(f"\n{i}. PKI Engine: {engine['path']} (namespace: {engine_namespace})")
+        else:
+            output_lines.append(f"\n{i}. PKI Engine: {engine['path']}")
         output_lines.append(f"   Description: {engine['description'] or 'No description'}")
         output_lines.append(f"   Accessor: {engine['accessor']}")
         
@@ -441,7 +566,7 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
                     output_lines.append(f"     {key}: {value}")
     
     # Add timeline visualization
-    timeline_output = create_timeline_visualization(pki_engines, timeline_width)
+    timeline_output = create_timeline_visualization(pki_engines, timeline_width, all_namespaces_scan)
     if timeline_output:
         output_lines.append(timeline_output)
     
