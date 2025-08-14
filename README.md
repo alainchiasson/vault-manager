@@ -215,18 +215,31 @@ The HTML output provides a professional, web-viewable report with interactive fe
 
 - **Responsive Design**: Works on desktop and mobile devices
 - **Collapsible Sections**: Click PKI engine headers to expand/collapse details
-- **Interactive Timeline**: Filter certificates by status or type with one-click controls
-- **Smart Tooltips**: Hover over certificate names for comprehensive details
-- **Color-Coded Status**: Visual indicators for certificate health
+- **Interactive Chart Timeline**: Professional HTML5 canvas chart with advanced filtering and tooltips
+- **Smart Tooltips**: Hover over certificate bars for comprehensive details
+- **Color-Coded Status**: Visual indicators for certificate health with gradient effects
 - **Namespace Support**: Clear namespace identification for Enterprise
-- **Timeline Visualization**: Interactive graphical representation of certificate lifecycles
+- **Chart Visualization**: Interactive graphical timeline showing certificate lifecycles with precision
 - **Professional Formatting**: Clean, modern design suitable for stakeholder reports
+
+**Interactive Chart Features:**
+- **HTML5 Canvas Timeline**: High-quality chart visualization with smooth gradients and precise rendering
+- **Advanced Status Coding**: 
+  - 🟢 Valid (>90 days) - Green gradient
+  - 🟡 Warning (30-90 days) - Orange gradient
+  - 🔴 Critical (<30 days) - Red gradient
+  - ⚫ Expired - Gray gradient
+  - 🔵 Future certificates - Blue gradient
+- **Smart Filtering**: Filter by status (All, Valid, Warning, Critical, Expired) or type (Root CAs, Intermediates)
+- **Rich Tooltips**: Detailed certificate information with validity periods, engine paths, and status
+- **Timeline Axis**: Dynamic time scale with month/year markers and current time indicator
+- **Certificate Hierarchy**: Visual distinction between Root CAs (📜), Intermediates (🔗), and Issuers (📄)
 
 **Interactive Controls:**
 - **Engine Cards**: Collapsible sections with visual expand/collapse indicators
-- **Timeline Filters**: All Certificates, Valid, Expiring Soon, Expired, Root CAs, Intermediates
+- **Chart Filters**: Real-time filtering with visual feedback and active state indicators
 - **Global Actions**: Expand All / Collapse All buttons for quick navigation
-- **Certificate Details**: Rich tooltips showing validity, type, namespace, and status information
+- **Hover Interactions**: Rich tooltips with comprehensive certificate details on chart hover
 
 ## SSL/TLS Security
 

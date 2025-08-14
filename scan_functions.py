@@ -721,112 +721,154 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             color: #e74c3c;
         }}
         
-        /* Interactive Timeline */
+        /* Interactive Timeline Chart */
         .timeline-container {{
             margin: 30px 0;
             background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
+            padding: 25px;
+            border-radius: 12px;
             border: 1px solid #e9ecef;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }}
         .timeline-controls {{
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             align-items: center;
         }}
         .timeline-control {{
-            padding: 5px 10px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
+            padding: 8px 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 25px;
             background: white;
             cursor: pointer;
             font-size: 0.9em;
+            font-weight: 500;
             transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }}
         .timeline-control:hover {{
             background: #e9ecef;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }}
         .timeline-control.active {{
-            background: #3498db;
+            background: linear-gradient(135deg, #3498db, #2980b9);
             color: white;
-            border-color: #3498db;
-        }}
-        .timeline-visual {{
-            background: #2c3e50;
-            border-radius: 8px;
-            padding: 20px;
-            overflow-x: auto;
-            position: relative;
-        }}
-        .timeline-header {{
-            color: #ecf0f1;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            border-bottom: 1px solid #34495e;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }}
-        .cert-row {{
-            position: relative;
-            margin: 8px 0;
-            padding: 4px 0;
-            transition: all 0.3s ease;
-        }}
-        .cert-row:hover {{
-            background: rgba(52, 73, 94, 0.3);
-            border-radius: 4px;
-        }}
-        .cert-name {{
-            color: #ecf0f1;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            display: inline-block;
-            width: 300px;
-            padding-right: 10px;
-            cursor: pointer;
-        }}
-        .cert-timeline {{
-            display: inline-block;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            width: {timeline_width}ch;
-            position: relative;
-        }}
-        .cert-status {{
-            color: #bdc3c7;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            display: inline-block;
-            width: 150px;
-            padding-left: 10px;
+            border-color: #2980b9;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
         }}
         
-        /* Certificate Details Tooltip */
-        .cert-tooltip {{
+        /* Chart Container */
+        .chart-container {{
+            position: relative;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }}
+        #timelineChart {{
+            width: 100%;
+            height: 400px;
+            cursor: crosshair;
+        }}
+        
+        /* Chart Tooltip */
+        .chart-tooltip {{
             position: absolute;
-            background: #2c3e50;
+            background: linear-gradient(135deg, #2c3e50, #34495e);
             color: #ecf0f1;
-            padding: 10px;
-            border-radius: 6px;
+            padding: 12px 16px;
+            border-radius: 8px;
             border: 1px solid #34495e;
-            font-size: 11px;
+            font-size: 12px;
             z-index: 1000;
             display: none;
-            max-width: 300px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            max-width: 320px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
         }}
-        .cert-tooltip::before {{
+        .chart-tooltip::before {{
             content: '';
             position: absolute;
             top: -6px;
-            left: 10px;
+            left: 15px;
             width: 0;
             height: 0;
             border-left: 6px solid transparent;
             border-right: 6px solid transparent;
             border-bottom: 6px solid #2c3e50;
+        }}
+        
+        /* Chart Legend */
+        .chart-legend {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .chart-legend h3 {{
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }}
+        .legend-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            margin-bottom: 15px;
+        }}
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background 0.3s ease;
+        }}
+        .legend-item:hover {{
+            background: #f8f9fa;
+        }}
+        .legend-color {{
+            width: 20px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }}
+        .legend-marker.current-time {{
+            width: 20px;
+            height: 12px;
+            background: repeating-linear-gradient(
+                45deg,
+                #e74c3c,
+                #e74c3c 3px,
+                transparent 3px,
+                transparent 6px
+            );
+            border: 1px solid #e74c3c;
+            border-radius: 3px;
+        }}
+        
+        /* Responsive design */
+        @media (max-width: 768px) {{
+            .timeline-controls {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+            .timeline-control {{
+                text-align: center;
+                margin-bottom: 5px;
+            }}
+            #timelineChart {{
+                height: 300px;
+            }}
+            .legend-grid {{
+                grid-template-columns: 1fr;
+            }}
         }}
         
         .legend {{
@@ -1055,23 +1097,11 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             }}
         }}
         
-        // Timeline filtering functionality
+        // Legacy timeline filtering (kept for compatibility)
         function filterTimeline(filter) {{
-            const rows = document.querySelectorAll('.cert-row');
-            const controls = document.querySelectorAll('.timeline-control');
-            
-            // Update active control
-            controls.forEach(control => control.classList.remove('active'));
-            document.querySelector(`[onclick="filterTimeline('${{filter}}')"]`).classList.add('active');
-            
-            rows.forEach(row => {{
-                const status = row.getAttribute('data-status');
-                if (filter === 'all' || status === filter) {{
-                    row.style.display = 'block';
-                }} else {{
-                    row.style.display = 'none';
-                }}
-            }});
+            // This function is kept for backward compatibility
+            // The new chart uses filterTimelineChart instead
+            filterTimelineChart(filter);
         }}
         
         // Certificate tooltip functionality
@@ -1147,17 +1177,18 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
 
 def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
     """
-    Generate interactive HTML timeline visualization.
+    Generate interactive HTML timeline visualization with a proper chart view.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
-        timeline_width: Width of the timeline in characters
+        timeline_width: Width of the timeline in characters (not used in chart view)
         all_namespaces: Whether this is an all-namespaces scan
         
     Returns:
-        HTML string containing the interactive timeline visualization
+        HTML string containing the interactive chart timeline visualization
     """
     import datetime
+    import json
     from utils import format_datetime
     
     # Collect all certificates (reusing logic from text timeline)
@@ -1214,91 +1245,20 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
     if not certs:
         return ""
     
-    # Normalize timezone for all certificates
+    # Normalize timezone for all certificates and prepare data for JavaScript
+    chart_data = []
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
     for cert in certs:
         if cert['not_before'].tzinfo is None:
             cert['not_before'] = cert['not_before'].replace(tzinfo=datetime.timezone.utc)
         if cert['not_after'].tzinfo is None:
             cert['not_after'] = cert['not_after'].replace(tzinfo=datetime.timezone.utc)
-    
-    # Calculate timeline
-    all_start_dates = [cert['not_before'] for cert in certs]
-    all_end_dates = [cert['not_after'] for cert in certs]
-    
-    earliest_start = min(all_start_dates)
-    latest_end = max(all_end_dates)
-    
-    time_range = latest_end - earliest_start
-    padding = time_range * 0.05
-    timeline_start = earliest_start - padding
-    timeline_end = latest_end + padding
-    timeline_duration = timeline_end - timeline_start
-    
-    # Sort certificates
-    def sort_key(cert):
-        if cert['cert_type'] == 'root_ca':
-            return (0, cert['not_before'])
-        elif cert['cert_type'] == 'intermediate':
-            return (1, cert['not_before'])
-        else:
-            return (2, cert['not_before'])
-    
-    sorted_certs = sorted(certs, key=sort_key)
-    
-    now = datetime.datetime.now(datetime.timezone.utc)
-    
-    html = f"""
-        <div class="timeline-container">
-            <h2>📅 Interactive Certificate Timeline</h2>
-            <p><strong>Timeline Range:</strong> {format_datetime(timeline_start)} to {format_datetime(timeline_end)}</p>
-            
-            <div class="timeline-controls">
-                <span style="font-weight: bold; margin-right: 15px;">Filter:</span>
-                <div class="timeline-control active" onclick="filterTimeline('all')">All Certificates</div>
-                <div class="timeline-control" onclick="filterTimeline('valid')">Valid</div>
-                <div class="timeline-control" onclick="filterTimeline('warning')">Expiring Soon</div>
-                <div class="timeline-control" onclick="filterTimeline('expired')">Expired</div>
-                <div class="timeline-control" onclick="filterTimeline('root_ca')">Root CAs</div>
-                <div class="timeline-control" onclick="filterTimeline('intermediate')">Intermediates</div>
-            </div>
-            
-            <div class="timeline-visual">
-                <div class="timeline-header">
-                    {'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}
-                    {'-'*50} {'-'*timeline_width} {'-'*15}
-                </div>"""
-    
-    for cert in sorted_certs:
-        # Calculate positions
-        start_pos = int((cert['not_before'] - timeline_start) / timeline_duration * timeline_width)
-        end_pos = int((cert['not_after'] - timeline_start) / timeline_duration * timeline_width)
-        now_pos = int((now - timeline_start) / timeline_duration * timeline_width)
         
-        start_pos = max(0, min(start_pos, timeline_width - 1))
-        end_pos = max(0, min(end_pos, timeline_width - 1))
-        now_pos = max(0, min(now_pos, timeline_width - 1))
-        
-        # Create timeline
-        timeline = [' '] * timeline_width
-        
-        for i in range(start_pos, min(end_pos + 1, timeline_width)):
-            timeline[i] = '█'
-        
-        if start_pos < timeline_width:
-            timeline[start_pos] = '├'
-        if end_pos < timeline_width and end_pos != start_pos:
-            timeline[end_pos] = '┤'
-        
-        if 0 <= now_pos < timeline_width:
-            if timeline[now_pos] == '█':
-                timeline[now_pos] = '●'
-            else:
-                timeline[now_pos] = '│'
-        
-        # Determine status and status class
+        # Determine status
         if now < cert['not_before']:
             status = "Future"
-            status_class = "valid"
+            status_class = "future"
         elif now > cert['not_after']:
             days_expired = (now - cert['not_after']).days
             status = f"EXPIRED ({days_expired}d)"
@@ -1306,63 +1266,352 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
         else:
             days_remaining = (cert['not_after'] - now).days
             if days_remaining < 30:
-                status = f"⚠️ {days_remaining}d left"
-                status_class = "expired"
+                status = f"Critical ({days_remaining}d left)"
+                status_class = "critical"
             elif days_remaining < 90:
-                status = f"⚡ {days_remaining}d left"
+                status = f"Warning ({days_remaining}d left)"
                 status_class = "warning"
             else:
-                status = f"✓ {days_remaining}d left"
+                status = f"Valid ({days_remaining}d left)"
                 status_class = "valid"
         
-        # Format name
-        cert_name = cert['name']
-        if len(cert_name) > 48:
-            cert_name = cert_name[:45] + "..."
-        
-        if cert['cert_type'] == 'intermediate' and cert['parent_ca']:
-            cert_name = f"  ↳ {cert_name}"
-        elif cert['cert_type'] == 'root_ca':
-            cert_name = f"📜 {cert_name}"
-        
-        # Create tooltip data
-        tooltip_data = f"""
-            <strong>{cert['name']}</strong><br>
-            <strong>Type:</strong> {cert['cert_type'].replace('_', ' ').title()}<br>
-            <strong>Valid From:</strong> {format_datetime(cert['not_before'])}<br>
-            <strong>Valid Until:</strong> {format_datetime(cert['not_after'])}<br>
-            <strong>Engine:</strong> {cert['engine_path']}<br>
-            <strong>Namespace:</strong> {cert['namespace']}<br>
-            {f"<strong>Description:</strong> {cert.get('description', 'N/A')}<br>" if cert.get('description') else ""}
-            {f"<strong>Issuer ID:</strong> {cert.get('issuer_id', 'N/A')}<br>" if cert.get('issuer_id') else ""}
-            <strong>Status:</strong> {status}
-        """
-        
-        timeline_str = ''.join(timeline)
-        html += f"""
-                <div class="cert-row" data-status="{status_class}" data-type="{cert['cert_type']}">
-                    <span class="cert-name" 
-                          onmouseover="showTooltip(event, `{tooltip_data.replace('`', '&#96;').replace("'", '&#39;')}`)"
-                          onmouseout="hideTooltip()">{cert_name}</span>
-                    <span class="cert-timeline">{timeline_str}</span>
-                    <span class="cert-status">{status}</span>
-                </div>"""
+        chart_data.append({
+            'name': cert['name'],
+            'start': cert['not_before'].isoformat(),
+            'end': cert['not_after'].isoformat(),
+            'type': cert['cert_type'],
+            'status': status,
+            'status_class': status_class,
+            'engine_path': cert['engine_path'],
+            'namespace': cert['namespace'],
+            'description': cert.get('description', ''),
+            'issuer_id': cert.get('issuer_id', ''),
+            'days_remaining': (cert['not_after'] - now).days if now <= cert['not_after'] else -(now - cert['not_after']).days
+        })
     
-    html += """
+    # Sort certificates by type and start date
+    chart_data.sort(key=lambda x: (
+        0 if x['type'] == 'root_ca' else 1 if x['type'] == 'intermediate' else 2,
+        x['start']
+    ))
+    
+    # Calculate timeline bounds
+    all_starts = [datetime.datetime.fromisoformat(cert['start']) for cert in chart_data]
+    all_ends = [datetime.datetime.fromisoformat(cert['end']) for cert in chart_data]
+    
+    timeline_start = min(all_starts)
+    timeline_end = max(all_ends)
+    
+    # Add some padding
+    time_range = timeline_end - timeline_start
+    padding = time_range * 0.05
+    timeline_start -= padding
+    timeline_end += padding
+    
+    html = f"""
+        <div class="timeline-container">
+            <h2>📊 Interactive Certificate Timeline Chart</h2>
+            <p><strong>Timeline Range:</strong> {format_datetime(timeline_start)} to {format_datetime(timeline_end)}</p>
+            
+            <div class="timeline-controls">
+                <span style="font-weight: bold; margin-right: 15px;">Filter:</span>
+                <div class="timeline-control active" onclick="filterTimelineChart('all')">All Certificates</div>
+                <div class="timeline-control" onclick="filterTimelineChart('valid')">Valid</div>
+                <div class="timeline-control" onclick="filterTimelineChart('warning')">Warning</div>
+                <div class="timeline-control" onclick="filterTimelineChart('critical')">Critical</div>
+                <div class="timeline-control" onclick="filterTimelineChart('expired')">Expired</div>
+                <div class="timeline-control" onclick="filterTimelineChart('root_ca')">Root CAs</div>
+                <div class="timeline-control" onclick="filterTimelineChart('intermediate')">Intermediates</div>
             </div>
-            <div class="legend">
-                <strong>Interactive Timeline Legend:</strong><br>
-                📜       Root CA certificate (click for details)<br>
-                ↳        Intermediate CA (signed by parent)<br>
-                │        Hierarchy connection<br>
-                ├████████┤  Certificate validity period<br>
-                ●        Current time (within validity)<br>
-                │        Current time (outside validity)<br>
-                ✓        Valid (>90 days remaining)<br>
-                ⚡       Expires soon (30-90 days)<br>
-                ⚠️        Critical (< 30 days)<br><br>
-                <strong>Hover over certificate names for detailed information</strong>
+            
+            <div class="chart-container">
+                <canvas id="timelineChart" width="1000" height="400"></canvas>
+                <div id="chartTooltip" class="chart-tooltip"></div>
             </div>
-        </div>"""
+            
+            <div class="chart-legend">
+                <h3>📋 Chart Legend</h3>
+                <div class="legend-grid">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
+                        <span>Valid Certificate (>90 days)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(90deg, #f39c12, #e67e22);"></div>
+                        <span>Warning (30-90 days)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(90deg, #e74c3c, #c0392b);"></div>
+                        <span>Critical (<30 days)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(90deg, #95a5a6, #7f8c8d);"></div>
+                        <span>Expired</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(90deg, #3498db, #2980b9);"></div>
+                        <span>Future Certificate</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-marker current-time"></div>
+                        <span>Current Time</span>
+                    </div>
+                </div>
+                <p><strong>💡 Tip:</strong> Hover over certificate bars for detailed information. Click filter buttons to show specific certificate types or statuses.</p>
+            </div>
+        </div>
+        
+        <script>
+            // Chart data and configuration
+            const chartData = {json.dumps(chart_data)};
+            const timelineStart = new Date('{timeline_start.isoformat()}');
+            const timelineEnd = new Date('{timeline_end.isoformat()}');
+            const currentTime = new Date();
+            
+            let filteredData = [...chartData];
+            let canvas, ctx, tooltip;
+            
+            // Initialize chart when DOM is ready
+            document.addEventListener('DOMContentLoaded', function() {{
+                canvas = document.getElementById('timelineChart');
+                ctx = canvas.getContext('2d');
+                tooltip = document.getElementById('chartTooltip');
+                
+                // Set up event listeners
+                canvas.addEventListener('mousemove', handleMouseMove);
+                canvas.addEventListener('mouseleave', hideChartTooltip);
+                canvas.addEventListener('click', handleClick);
+                
+                // Initial render
+                renderChart();
+            }});
+            
+            function renderChart() {{
+                if (!ctx) return;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const padding = {{ top: 40, right: 60, bottom: 60, left: 250 }};
+                const chartWidth = canvas.width - padding.left - padding.right;
+                const chartHeight = canvas.height - padding.top - padding.bottom;
+                
+                // Calculate time scale
+                const timeRange = timelineEnd.getTime() - timelineStart.getTime();
+                const timeToX = (time) => padding.left + ((time - timelineStart.getTime()) / timeRange) * chartWidth;
+                
+                // Draw time axis
+                drawTimeAxis(ctx, padding, chartWidth, chartHeight);
+                
+                // Draw certificate bars
+                const barHeight = Math.max(20, (chartHeight - 20) / filteredData.length);
+                const barSpacing = 4;
+                
+                filteredData.forEach((cert, index) => {{
+                    const y = padding.top + index * (barHeight + barSpacing);
+                    const startX = timeToX(new Date(cert.start).getTime());
+                    const endX = timeToX(new Date(cert.end).getTime());
+                    const width = Math.max(2, endX - startX);
+                    
+                    // Get color based on status
+                    const colors = getStatusColors(cert.status_class);
+                    
+                    // Draw certificate bar with gradient
+                    const gradient = ctx.createLinearGradient(startX, y, endX, y);
+                    gradient.addColorStop(0, colors.start);
+                    gradient.addColorStop(1, colors.end);
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(startX, y, width, barHeight - 2);
+                    
+                    // Add border
+                    ctx.strokeStyle = colors.border;
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(startX, y, width, barHeight - 2);
+                    
+                    // Draw certificate name
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'middle';
+                    
+                    const displayName = cert.name.length > 35 ? cert.name.substring(0, 32) + '...' : cert.name;
+                    const typeIcon = cert.type === 'root_ca' ? '📜' : cert.type === 'intermediate' ? '🔗' : '📄';
+                    ctx.fillText(`${{typeIcon}} ${{displayName}}`, padding.left - 10, y + barHeight / 2);
+                    
+                    // Store bar position for mouse interaction
+                    cert._chartBounds = {{ x: startX, y: y, width: width, height: barHeight - 2 }};
+                }});
+                
+                // Draw current time line
+                const currentX = timeToX(currentTime.getTime());
+                if (currentX >= padding.left && currentX <= padding.left + chartWidth) {{
+                    ctx.strokeStyle = '#e74c3c';
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.moveTo(currentX, padding.top);
+                    ctx.lineTo(currentX, padding.top + chartHeight);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    // Current time label
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('NOW', currentX, padding.top - 10);
+                }}
+            }}
+            
+            function drawTimeAxis(ctx, padding, chartWidth, chartHeight) {{
+                const axisY = padding.top + chartHeight;
+                
+                // Draw main axis line
+                ctx.strokeStyle = '#34495e';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(padding.left, axisY);
+                ctx.lineTo(padding.left + chartWidth, axisY);
+                ctx.stroke();
+                
+                // Calculate time intervals
+                const timeRange = timelineEnd.getTime() - timelineStart.getTime();
+                const monthsRange = timeRange / (1000 * 60 * 60 * 24 * 30);
+                const interval = monthsRange > 24 ? 6 : monthsRange > 12 ? 3 : 1; // months
+                
+                // Draw time labels
+                let currentDate = new Date(timelineStart);
+                currentDate.setDate(1); // Start at beginning of month
+                
+                while (currentDate <= timelineEnd) {{
+                    const x = padding.left + ((currentDate.getTime() - timelineStart.getTime()) / timeRange) * chartWidth;
+                    
+                    if (x >= padding.left && x <= padding.left + chartWidth) {{
+                        // Tick mark
+                        ctx.strokeStyle = '#7f8c8d';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(x, axisY);
+                        ctx.lineTo(x, axisY + 5);
+                        ctx.stroke();
+                        
+                        // Label
+                        ctx.fillStyle = '#34495e';
+                        ctx.font = '10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'top';
+                        const label = currentDate.toLocaleDateString('en-US', {{ month: 'short', year: '2-digit' }});
+                        ctx.fillText(label, x, axisY + 8);
+                    }}
+                    
+                    // Move to next interval
+                    currentDate.setMonth(currentDate.getMonth() + interval);
+                }}
+            }}
+            
+            function getStatusColors(statusClass) {{
+                switch (statusClass) {{
+                    case 'valid':
+                        return {{ start: '#27ae60', end: '#2ecc71', border: '#1e8449' }};
+                    case 'warning':
+                        return {{ start: '#f39c12', end: '#e67e22', border: '#d68910' }};
+                    case 'critical':
+                        return {{ start: '#e74c3c', end: '#c0392b', border: '#a93226' }};
+                    case 'expired':
+                        return {{ start: '#95a5a6', end: '#7f8c8d', border: '#5d6d7e' }};
+                    case 'future':
+                        return {{ start: '#3498db', end: '#2980b9', border: '#1f4e79' }};
+                    default:
+                        return {{ start: '#bdc3c7', end: '#95a5a6', border: '#85929e' }};
+                }}
+            }}
+            
+            function handleMouseMove(event) {{
+                const rect = canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                // Find hovered certificate
+                const hoveredCert = filteredData.find(cert => {{
+                    const bounds = cert._chartBounds;
+                    return bounds && x >= bounds.x && x <= bounds.x + bounds.width && 
+                           y >= bounds.y && y <= bounds.y + bounds.height;
+                }});
+                
+                if (hoveredCert) {{
+                    showChartTooltip(event, hoveredCert);
+                    canvas.style.cursor = 'pointer';
+                }} else {{
+                    hideChartTooltip();
+                    canvas.style.cursor = 'default';
+                }}
+            }}
+            
+            function handleClick(event) {{
+                const rect = canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                // Find clicked certificate
+                const clickedCert = filteredData.find(cert => {{
+                    const bounds = cert._chartBounds;
+                    return bounds && x >= bounds.x && x <= bounds.x + bounds.width && 
+                           y >= bounds.y && y <= bounds.y + bounds.height;
+                }});
+                
+                if (clickedCert) {{
+                    // Could implement certificate details modal here
+                    console.log('Clicked certificate:', clickedCert);
+                }}
+            }}
+            
+            function showChartTooltip(event, cert) {{
+                const startDate = new Date(cert.start).toLocaleDateString();
+                const endDate = new Date(cert.end).toLocaleDateString();
+                const daysText = cert.days_remaining >= 0 ? 
+                    `${{cert.days_remaining}} days remaining` : 
+                    `Expired ${{Math.abs(cert.days_remaining)}} days ago`;
+                
+                tooltip.innerHTML = `
+                    <strong>${{cert.name}}</strong><br>
+                    <strong>Type:</strong> ${{cert.type.replace('_', ' ').replace(/\\b\\w/g, l => l.toUpperCase())}}<br>
+                    <strong>Valid:</strong> ${{startDate}} - ${{endDate}}<br>
+                    <strong>Engine:</strong> ${{cert.engine_path}}<br>
+                    <strong>Namespace:</strong> ${{cert.namespace}}<br>
+                    ${{cert.description ? `<strong>Description:</strong> ${{cert.description}}<br>` : ''}}
+                    ${{cert.issuer_id ? `<strong>Issuer ID:</strong> ${{cert.issuer_id}}<br>` : ''}}
+                    <strong>Status:</strong> ${{cert.status}}<br>
+                    <strong>Timeline:</strong> ${{daysText}}
+                `;
+                
+                tooltip.style.display = 'block';
+                tooltip.style.left = (event.pageX + 10) + 'px';
+                tooltip.style.top = (event.pageY - 10) + 'px';
+            }}
+            
+            function hideChartTooltip() {{
+                if (tooltip) {{
+                    tooltip.style.display = 'none';
+                }}
+            }}
+            
+            function filterTimelineChart(filter) {{
+                // Update active filter button
+                document.querySelectorAll('.timeline-control').forEach(btn => btn.classList.remove('active'));
+                event.target.classList.add('active');
+                
+                // Filter data
+                if (filter === 'all') {{
+                    filteredData = [...chartData];
+                }} else if (['valid', 'warning', 'critical', 'expired', 'future'].includes(filter)) {{
+                    filteredData = chartData.filter(cert => cert.status_class === filter);
+                }} else if (['root_ca', 'intermediate', 'issuer'].includes(filter)) {{
+                    filteredData = chartData.filter(cert => cert.type === filter);
+                }}
+                
+                // Re-render chart
+                renderChart();
+            }}
+        </script>"""
     
     return html
