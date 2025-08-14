@@ -94,6 +94,15 @@ def setup_rotate_root_ca_parser(subparsers):
 def create_argument_parser():
     """Create and configure the main argument parser with all subcommands."""
     parser = argparse.ArgumentParser(description="Vault PKI Manager")
+    
+    # Add global SSL/TLS options
+    parser.add_argument('--skip-verify', action='store_true', 
+                       help='Skip SSL certificate verification (overrides VAULT_SKIP_VERIFY)')
+    parser.add_argument('--ca-cert', type=str, 
+                       help='Path to CA certificate file for SSL verification (overrides VAULT_CACERT)')
+    parser.add_argument('--ca-path', type=str,
+                       help='Path to directory containing CA certificates (overrides VAULT_CAPATH)')
+    
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # Setup all command parsers
