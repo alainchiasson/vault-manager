@@ -575,7 +575,7 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
 
 def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) -> str:
     """
-    Generate an HTML report for PKI scan results.
+    Generate an HTML report for PKI scan results with interactive features.
     
     Args:
         scan_data: Dictionary containing vault info and PKI engine information
@@ -646,22 +646,53 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             border-left: 4px solid #ffffff;
             margin-top: 0;
         }}
+        
+        /* Collapsible PKI Engine Cards */
         .engine-card {{
             border: 1px solid #ddd;
             border-radius: 8px;
             margin: 15px 0;
-            padding: 20px;
             background: #fdfdfd;
-            transition: box-shadow 0.3s ease;
+            transition: all 0.3s ease;
+            overflow: hidden;
         }}
         .engine-card:hover {{
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }}
+        .engine-header {{
+            padding: 20px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s ease;
+        }}
+        .engine-header:hover {{
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
         }}
         .engine-title {{
             font-size: 1.2em;
             font-weight: bold;
             color: #2c3e50;
-            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }}
+        .collapse-indicator {{
+            font-size: 1.5em;
+            color: #6c757d;
+            transition: transform 0.3s ease;
+        }}
+        .collapse-indicator.collapsed {{
+            transform: rotate(-90deg);
+        }}
+        .engine-content {{
+            padding: 20px;
+            display: block;
+        }}
+        .engine-content.collapsed {{
+            display: none;
         }}
         .namespace-badge {{
             background: #3498db;
@@ -689,6 +720,8 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
         .status-not-configured {{
             color: #e74c3c;
         }}
+        
+        /* Interactive Timeline */
         .timeline-container {{
             margin: 30px 0;
             background: #f8f9fa;
@@ -696,28 +729,106 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             border-radius: 8px;
             border: 1px solid #e9ecef;
         }}
-        .timeline-bar {{
+        .timeline-controls {{
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }}
+        .timeline-control {{
+            padding: 5px 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }}
+        .timeline-control:hover {{
+            background: #e9ecef;
+        }}
+        .timeline-control.active {{
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }}
+        .timeline-visual {{
+            background: #2c3e50;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-x: auto;
+            position: relative;
+        }}
+        .timeline-header {{
+            color: #ecf0f1;
             font-family: 'Courier New', monospace;
             font-size: 12px;
-            white-space: pre;
-            overflow-x: auto;
-            background: #2c3e50;
-            color: #ecf0f1;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
+            border-bottom: 1px solid #34495e;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }}
+        .cert-row {{
+            position: relative;
+            margin: 8px 0;
+            padding: 4px 0;
+            transition: all 0.3s ease;
+        }}
+        .cert-row:hover {{
+            background: rgba(52, 73, 94, 0.3);
+            border-radius: 4px;
         }}
         .cert-name {{
-            display: inline-block;
-            width: 300px;
-            vertical-align: top;
-            padding-right: 10px;
-        }}
-        .timeline-row {{
-            margin: 2px 0;
+            color: #ecf0f1;
             font-family: 'Courier New', monospace;
             font-size: 12px;
+            display: inline-block;
+            width: 300px;
+            padding-right: 10px;
+            cursor: pointer;
         }}
+        .cert-timeline {{
+            display: inline-block;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            width: {timeline_width}ch;
+            position: relative;
+        }}
+        .cert-status {{
+            color: #bdc3c7;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            display: inline-block;
+            width: 150px;
+            padding-left: 10px;
+        }}
+        
+        /* Certificate Details Tooltip */
+        .cert-tooltip {{
+            position: absolute;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #34495e;
+            font-size: 11px;
+            z-index: 1000;
+            display: none;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }}
+        .cert-tooltip::before {{
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 10px;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 6px solid #2c3e50;
+        }}
+        
         .legend {{
             background: #ecf0f1;
             padding: 15px;
@@ -746,6 +857,14 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             color: #7f8c8d;
             font-style: italic;
             padding: 40px;
+        }}
+        
+        /* Utility classes */
+        .collapsed {{
+            display: none !important;
+        }}
+        .show {{
+            display: block !important;
         }}
     </style>
 </head>
@@ -784,7 +903,7 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             <p>No PKI secrets engines found.</p>
         </div>"""
     else:
-        # Add PKI engines information
+        # Add PKI engines information with collapsible sections
         for i, engine in enumerate(pki_engines, 1):
             engine_namespace = engine.get('namespace', 'root')
             namespace_badge = ""
@@ -796,17 +915,26 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             
             html_content += f"""
         <div class="engine-card">
-            <div class="engine-title">{i}. PKI Engine: {engine['path']}{namespace_badge}</div>
-            <p><strong>Description:</strong> {engine['description'] or 'No description'}</p>
-            <p><strong>Accessor:</strong> {engine['accessor']}</p>
-            <p><strong>CA Certificate:</strong> <span class="{ca_status}">{ca_text}</span></p>"""
+            <div class="engine-header" onclick="toggleEngine('{i}')">
+                <div class="engine-title">
+                    {i}. PKI Engine: {engine['path']}{namespace_badge}
+                    <span style="margin-left: 15px; font-size: 0.8em; color: #6c757d;">
+                        <span class="{ca_status}">{ca_text}</span>
+                    </span>
+                </div>
+                <div class="collapse-indicator" id="indicator-{i}">▼</div>
+            </div>
+            <div class="engine-content" id="content-{i}">
+                <p><strong>Description:</strong> {engine['description'] or 'No description'}</p>
+                <p><strong>Accessor:</strong> {engine['accessor']}</p>
+                <p><strong>CA Certificate:</strong> <span class="{ca_status}">{ca_text}</span></p>"""
             
             if engine['ca_certificate']:
                 start_date = format_datetime(engine.get('cert_not_before'))
                 end_date = format_datetime(engine.get('cert_not_after'))
                 html_content += f"""
-            <p><strong>Valid from:</strong> {start_date}</p>
-            <p><strong>Valid until:</strong> {end_date}</p>"""
+                <p><strong>Valid from:</strong> {start_date}</p>
+                <p><strong>Valid until:</strong> {end_date}</p>"""
                 
                 # Check expiration status
                 if engine.get('cert_not_after'):
@@ -831,34 +959,34 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
                         status_text = f"✓ {days_until_expiry} days remaining"
                     
                     html_content += f"""
-            <p><strong>Status:</strong> <span class="{status_class}">{status_text}</span></p>"""
+                <p><strong>Status:</strong> <span class="{status_class}">{status_text}</span></p>"""
             
             # Roles
             if engine['roles']:
                 html_content += f"""
-            <p><strong>Roles:</strong> {', '.join(engine['roles'])}</p>"""
+                <p><strong>Roles:</strong> {', '.join(engine['roles'])}</p>"""
             else:
                 html_content += f"""
-            <p><strong>Roles:</strong> None configured</p>"""
+                <p><strong>Roles:</strong> None configured</p>"""
             
             # Issuers
             if engine.get('issuers'):
                 html_content += f"""
-            <h3>📜 Issuers ({len(engine['issuers'])} certificate(s))</h3>
-            <div class="issuer-list">"""
+                <h3>📜 Issuers ({len(engine['issuers'])} certificate(s))</h3>
+                <div class="issuer-list">"""
                 
                 for j, issuer in enumerate(engine['issuers'], 1):
                     issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
                     html_content += f"""
-                <div>
-                    <strong>{j}. {issuer_name}</strong><br>
-                    <small>ID: {issuer['id']}</small><br>"""
+                    <div>
+                        <strong>{j}. {issuer_name}</strong><br>
+                        <small>ID: {issuer['id']}</small><br>"""
                     
                     if issuer.get('not_before') and issuer.get('not_after'):
                         start_date = format_datetime(issuer['not_before'])
                         end_date = format_datetime(issuer['not_after'])
                         html_content += f"""
-                    <small>Valid: {start_date} to {end_date}</small><br>"""
+                        <small>Valid: {start_date} to {end_date}</small><br>"""
                         
                         # Check issuer expiration status
                         cert_expiry = issuer['not_after']
@@ -882,25 +1010,26 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
                             status_text = f"✓ Valid"
                         
                         html_content += f"""
-                    <small><span class="{status_class}">{status_text}</span></small>"""
+                        <small><span class="{status_class}">{status_text}</span></small>"""
                     else:
                         html_content += f"""
-                    <small>Valid: Unknown</small>"""
+                        <small>Valid: Unknown</small>"""
                     
                     html_content += """
-                </div><br>"""
+                    </div><br>"""
                 
                 html_content += """
-            </div>"""
+                </div>"""
             else:
                 html_content += f"""
-            <p><strong>Issuers:</strong> None found</p>"""
+                <p><strong>Issuers:</strong> None found</p>"""
             
             html_content += """
+            </div>
         </div>"""
         
-        # Add timeline visualization
-        timeline_html = _generate_html_timeline(pki_engines, timeline_width, all_namespaces_scan)
+        # Add interactive timeline visualization
+        timeline_html = _generate_interactive_html_timeline(pki_engines, timeline_width, all_namespaces_scan)
         html_content += timeline_html
     
     html_content += f"""
@@ -908,15 +1037,117 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
             <p>Report generated by Vault PKI Manager on {report_time}</p>
         </div>
     </div>
+    
+    <script>
+        // Collapsible PKI Engine functionality
+        function toggleEngine(engineId) {{
+            const content = document.getElementById('content-' + engineId);
+            const indicator = document.getElementById('indicator-' + engineId);
+            
+            if (content.classList.contains('collapsed')) {{
+                content.classList.remove('collapsed');
+                indicator.classList.remove('collapsed');
+                indicator.textContent = '▼';
+            }} else {{
+                content.classList.add('collapsed');
+                indicator.classList.add('collapsed');
+                indicator.textContent = '▶';
+            }}
+        }}
+        
+        // Timeline filtering functionality
+        function filterTimeline(filter) {{
+            const rows = document.querySelectorAll('.cert-row');
+            const controls = document.querySelectorAll('.timeline-control');
+            
+            // Update active control
+            controls.forEach(control => control.classList.remove('active'));
+            document.querySelector(`[onclick="filterTimeline('${{filter}}')"]`).classList.add('active');
+            
+            rows.forEach(row => {{
+                const status = row.getAttribute('data-status');
+                if (filter === 'all' || status === filter) {{
+                    row.style.display = 'block';
+                }} else {{
+                    row.style.display = 'none';
+                }}
+            }});
+        }}
+        
+        // Certificate tooltip functionality
+        let tooltip = null;
+        
+        function showTooltip(event, certData) {{
+            hideTooltip();
+            
+            tooltip = document.createElement('div');
+            tooltip.className = 'cert-tooltip';
+            tooltip.innerHTML = certData;
+            document.body.appendChild(tooltip);
+            
+            const rect = event.target.getBoundingClientRect();
+            tooltip.style.left = (rect.left + window.scrollX) + 'px';
+            tooltip.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+            tooltip.style.display = 'block';
+        }}
+        
+        function hideTooltip() {{
+            if (tooltip) {{
+                document.body.removeChild(tooltip);
+                tooltip = null;
+            }}
+        }}
+        
+        // Expand/Collapse all engines
+        function toggleAllEngines(expand) {{
+            const engines = document.querySelectorAll('.engine-content');
+            const indicators = document.querySelectorAll('.collapse-indicator');
+            
+            engines.forEach((content, index) => {{
+                const indicator = indicators[index];
+                if (expand) {{
+                    content.classList.remove('collapsed');
+                    indicator.classList.remove('collapsed');
+                    indicator.textContent = '▼';
+                }} else {{
+                    content.classList.add('collapsed');
+                    indicator.classList.add('collapsed');
+                    indicator.textContent = '▶';
+                }}
+            }});
+        }}
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {{
+            // Add global controls
+            const header = document.querySelector('h2');
+            if (header && header.textContent.includes('PKI Secrets Engines')) {{
+                const controls = document.createElement('div');
+                controls.style.marginTop = '10px';
+                controls.innerHTML = `
+                    <button onclick="toggleAllEngines(true)" style="margin-right: 10px; padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 4px; background: white; cursor: pointer;">Expand All</button>
+                    <button onclick="toggleAllEngines(false)" style="padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 4px; background: white; cursor: pointer;">Collapse All</button>
+                `;
+                header.appendChild(controls);
+            }}
+        }});
+        
+        // Hide tooltip when clicking elsewhere
+        document.addEventListener('click', function(event) {{
+            if (!event.target.closest('.cert-row')) {{
+                hideTooltip();
+            }}
+        }});
+    </script>
 </body>
 </html>"""
     
     return html_content
 
 
-def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
+def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
     """
-    Generate HTML timeline visualization.
+    Generate interactive HTML timeline visualization.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
@@ -924,7 +1155,7 @@ def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: i
         all_namespaces: Whether this is an all-namespaces scan
         
     Returns:
-        HTML string containing the timeline visualization
+        HTML string containing the interactive timeline visualization
     """
     import datetime
     from utils import format_datetime
@@ -948,7 +1179,9 @@ def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: i
                 'engine_path': engine['path'],
                 'namespace': engine_namespace,
                 'cert_type': 'root_ca',
-                'parent_ca': None
+                'parent_ca': None,
+                'description': engine.get('description', ''),
+                'accessor': engine.get('accessor', '')
             }
             certs.append(cert_entry)
             ca_engines[engine['path']] = cert_entry
@@ -972,7 +1205,9 @@ def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: i
                     'engine_path': engine['path'],
                     'namespace': engine_namespace,
                     'cert_type': 'intermediate' if is_intermediate else 'issuer',
-                    'parent_ca': None
+                    'parent_ca': None,
+                    'issuer_id': issuer.get('id', ''),
+                    'description': f"Issuer in {engine['path']}"
                 }
                 certs.append(cert_entry)
     
@@ -1010,17 +1245,28 @@ def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: i
     
     sorted_certs = sorted(certs, key=sort_key)
     
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
     html = f"""
         <div class="timeline-container">
-            <h2>📅 Certificate Validity Timeline</h2>
-            <p><strong>Timeline:</strong> {format_datetime(timeline_start)} to {format_datetime(timeline_end)}</p>
-            <div class="timeline-bar">"""
-    
-    # Header
-    html += f"{'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}\n"
-    html += f"{'-'*50} {'-'*timeline_width} {'-'*15}\n"
-    
-    now = datetime.datetime.now(datetime.timezone.utc)
+            <h2>📅 Interactive Certificate Timeline</h2>
+            <p><strong>Timeline Range:</strong> {format_datetime(timeline_start)} to {format_datetime(timeline_end)}</p>
+            
+            <div class="timeline-controls">
+                <span style="font-weight: bold; margin-right: 15px;">Filter:</span>
+                <div class="timeline-control active" onclick="filterTimeline('all')">All Certificates</div>
+                <div class="timeline-control" onclick="filterTimeline('valid')">Valid</div>
+                <div class="timeline-control" onclick="filterTimeline('warning')">Expiring Soon</div>
+                <div class="timeline-control" onclick="filterTimeline('expired')">Expired</div>
+                <div class="timeline-control" onclick="filterTimeline('root_ca')">Root CAs</div>
+                <div class="timeline-control" onclick="filterTimeline('intermediate')">Intermediates</div>
+            </div>
+            
+            <div class="timeline-visual">
+                <div class="timeline-header">
+                    {'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}
+                    {'-'*50} {'-'*timeline_width} {'-'*15}
+                </div>"""
     
     for cert in sorted_certs:
         # Calculate positions
@@ -1049,20 +1295,25 @@ def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: i
             else:
                 timeline[now_pos] = '│'
         
-        # Status
+        # Determine status and status class
         if now < cert['not_before']:
             status = "Future"
+            status_class = "valid"
         elif now > cert['not_after']:
             days_expired = (now - cert['not_after']).days
             status = f"EXPIRED ({days_expired}d)"
+            status_class = "expired"
         else:
             days_remaining = (cert['not_after'] - now).days
             if days_remaining < 30:
                 status = f"⚠️ {days_remaining}d left"
+                status_class = "expired"
             elif days_remaining < 90:
                 status = f"⚡ {days_remaining}d left"
+                status_class = "warning"
             else:
                 status = f"✓ {days_remaining}d left"
+                status_class = "valid"
         
         # Format name
         cert_name = cert['name']
@@ -1074,13 +1325,34 @@ def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: i
         elif cert['cert_type'] == 'root_ca':
             cert_name = f"📜 {cert_name}"
         
+        # Create tooltip data
+        tooltip_data = f"""
+            <strong>{cert['name']}</strong><br>
+            <strong>Type:</strong> {cert['cert_type'].replace('_', ' ').title()}<br>
+            <strong>Valid From:</strong> {format_datetime(cert['not_before'])}<br>
+            <strong>Valid Until:</strong> {format_datetime(cert['not_after'])}<br>
+            <strong>Engine:</strong> {cert['engine_path']}<br>
+            <strong>Namespace:</strong> {cert['namespace']}<br>
+            {f"<strong>Description:</strong> {cert.get('description', 'N/A')}<br>" if cert.get('description') else ""}
+            {f"<strong>Issuer ID:</strong> {cert.get('issuer_id', 'N/A')}<br>" if cert.get('issuer_id') else ""}
+            <strong>Status:</strong> {status}
+        """
+        
         timeline_str = ''.join(timeline)
-        html += f"{cert_name:<50} {timeline_str:<{timeline_width}} {status}\n"
+        html += f"""
+                <div class="cert-row" data-status="{status_class}" data-type="{cert['cert_type']}">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `{tooltip_data.replace('`', '&#96;').replace("'", '&#39;')}`)"
+                          onmouseout="hideTooltip()">{cert_name}</span>
+                    <span class="cert-timeline">{timeline_str}</span>
+                    <span class="cert-status">{status}</span>
+                </div>"""
     
-    html += """</div>
+    html += """
+            </div>
             <div class="legend">
-                <strong>Legend:</strong><br>
-                📜       Root CA certificate<br>
+                <strong>Interactive Timeline Legend:</strong><br>
+                📜       Root CA certificate (click for details)<br>
                 ↳        Intermediate CA (signed by parent)<br>
                 │        Hierarchy connection<br>
                 ├████████┤  Certificate validity period<br>
@@ -1088,7 +1360,8 @@ def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: i
                 │        Current time (outside validity)<br>
                 ✓        Valid (>90 days remaining)<br>
                 ⚡       Expires soon (30-90 days)<br>
-                ⚠️        Critical (< 30 days)
+                ⚠️        Critical (< 30 days)<br><br>
+                <strong>Hover over certificate names for detailed information</strong>
             </div>
         </div>"""
     

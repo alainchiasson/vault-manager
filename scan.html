@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vault PKI Manager Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #2c3e50;
+            margin-top: 25px;
+        }
+        .vault-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+        .vault-info h2 {
+            color: white;
+            border-left: 4px solid #ffffff;
+            margin-top: 0;
+        }
+        
+        /* Collapsible PKI Engine Cards */
+        .engine-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin: 15px 0;
+            background: #fdfdfd;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .engine-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .engine-header {
+            padding: 20px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s ease;
+        }
+        .engine-header:hover {
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        }
+        .engine-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+        }
+        .collapse-indicator {
+            font-size: 1.5em;
+            color: #6c757d;
+            transition: transform 0.3s ease;
+        }
+        .collapse-indicator.collapsed {
+            transform: rotate(-90deg);
+        }
+        .engine-content {
+            padding: 20px;
+            display: block;
+        }
+        .engine-content.collapsed {
+            display: none;
+        }
+        .namespace-badge {
+            background: #3498db;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .status-valid {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .status-warning {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        .status-expired {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .status-configured {
+            color: #27ae60;
+        }
+        .status-not-configured {
+            color: #e74c3c;
+        }
+        
+        /* Interactive Timeline */
+        .timeline-container {
+            margin: 30px 0;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .timeline-controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .timeline-control {
+            padding: 5px 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+        .timeline-control:hover {
+            background: #e9ecef;
+        }
+        .timeline-control.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        .timeline-visual {
+            background: #2c3e50;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-x: auto;
+            position: relative;
+        }
+        .timeline-header {
+            color: #ecf0f1;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            border-bottom: 1px solid #34495e;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .cert-row {
+            position: relative;
+            margin: 8px 0;
+            padding: 4px 0;
+            transition: all 0.3s ease;
+        }
+        .cert-row:hover {
+            background: rgba(52, 73, 94, 0.3);
+            border-radius: 4px;
+        }
+        .cert-name {
+            color: #ecf0f1;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            display: inline-block;
+            width: 300px;
+            padding-right: 10px;
+            cursor: pointer;
+        }
+        .cert-timeline {
+            display: inline-block;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            width: 50ch;
+            position: relative;
+        }
+        .cert-status {
+            color: #bdc3c7;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            display: inline-block;
+            width: 150px;
+            padding-left: 10px;
+        }
+        
+        /* Certificate Details Tooltip */
+        .cert-tooltip {
+            position: absolute;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #34495e;
+            font-size: 11px;
+            z-index: 1000;
+            display: none;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .cert-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 10px;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 6px solid #2c3e50;
+        }
+        
+        .legend {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .issuer-list {
+            margin-left: 20px;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #3498db;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        .no-engines {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+            padding: 40px;
+        }
+        
+        /* Utility classes */
+        .collapsed {
+            display: none !important;
+        }
+        .show {
+            display: block !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Vault PKI Manager Report</h1>
+        
+        <div class="vault-info">
+            <h2>📊 Vault Information</h2>
+            <p><strong>Version:</strong> Unknown</p>
+            <p><strong>Edition:</strong> ℹ️ Vault Open Source</p>
+        </div>
+        
+        <h2>🏛️ PKI Secrets Engines (2 found)</h2>
+        <div class="engine-card">
+            <div class="engine-header" onclick="toggleEngine('1')">
+                <div class="engine-title">
+                    1. PKI Engine: pki-intermediate
+                    <span style="margin-left: 15px; font-size: 0.8em; color: #6c757d;">
+                        <span class="status-configured">✓ Configured</span>
+                    </span>
+                </div>
+                <div class="collapse-indicator" id="indicator-1">▼</div>
+            </div>
+            <div class="engine-content" id="content-1">
+                <p><strong>Description:</strong> No description</p>
+                <p><strong>Accessor:</strong> pki_1e83ed81</p>
+                <p><strong>CA Certificate:</strong> <span class="status-configured">✓ Configured</span></p>
+                <p><strong>Valid from:</strong> 2025-08-12 03:02:07 UTC</p>
+                <p><strong>Valid until:</strong> 2025-12-10 03:02:37 UTC</p>
+                <p><strong>Status:</strong> <span class="status-valid">✓ 117 days remaining</span></p>
+                <p><strong>Roles:</strong> None configured</p>
+                <h3>📜 Issuers (4 certificate(s))</h3>
+                <div class="issuer-list">
+                    <div>
+                        <strong>1. My Intermediate CA</strong><br>
+                        <small>ID: 8d704100-dc03-3d13-4bf3-a35bdba2594b</small><br>
+                        <small>Valid: 2025-08-12 02:40:24 UTC to 2026-08-12 02:01:02 UTC</small><br>
+                        <small><span class="status-valid">✓ Valid</span></small>
+                    </div><br>
+                    <div>
+                        <strong>2. My Intermediate CA</strong><br>
+                        <small>ID: 93e631d2-09e0-48c9-976f-552815e24f79</small><br>
+                        <small>Valid: 2025-08-12 03:02:07 UTC to 2025-12-10 03:02:37 UTC</small><br>
+                        <small><span class="status-valid">✓ Valid</span></small>
+                    </div><br>
+                    <div>
+                        <strong>3. My Intermediate CA</strong><br>
+                        <small>ID: addf5c74-3eff-70fb-b562-d3f5c2ef2f2c</small><br>
+                        <small>Valid: 2025-08-12 02:41:08 UTC to 2026-08-12 02:01:02 UTC</small><br>
+                        <small><span class="status-valid">✓ Valid</span></small>
+                    </div><br>
+                    <div>
+                        <strong>4. My Intermediate CA 2</strong><br>
+                        <small>ID: db3d9bf5-e279-e2a9-38d3-0040f8092014</small><br>
+                        <small>Valid: 2025-08-12 10:14:57 UTC to 2025-12-10 10:15:27 UTC</small><br>
+                        <small><span class="status-valid">✓ Valid</span></small>
+                    </div><br>
+                </div>
+            </div>
+        </div>
+        <div class="engine-card">
+            <div class="engine-header" onclick="toggleEngine('2')">
+                <div class="engine-title">
+                    2. PKI Engine: pki
+                    <span style="margin-left: 15px; font-size: 0.8em; color: #6c757d;">
+                        <span class="status-configured">✓ Configured</span>
+                    </span>
+                </div>
+                <div class="collapse-indicator" id="indicator-2">▼</div>
+            </div>
+            <div class="engine-content" id="content-2">
+                <p><strong>Description:</strong> No description</p>
+                <p><strong>Accessor:</strong> pki_2599dce7</p>
+                <p><strong>CA Certificate:</strong> <span class="status-configured">✓ Configured</span></p>
+                <p><strong>Valid from:</strong> 2025-08-12 10:13:43 UTC</p>
+                <p><strong>Valid until:</strong> 2026-08-12 10:14:13 UTC</p>
+                <p><strong>Status:</strong> <span class="status-valid">✓ 362 days remaining</span></p>
+                <p><strong>Roles:</strong> None configured</p>
+                <h3>📜 Issuers (2 certificate(s))</h3>
+                <div class="issuer-list">
+                    <div>
+                        <strong>1. My Root CA</strong><br>
+                        <small>ID: ee65eb03-8490-8712-e4e1-4a17daa78aa4</small><br>
+                        <small>Valid: 2025-08-12 02:00:32 UTC to 2026-08-12 02:01:02 UTC</small><br>
+                        <small><span class="status-valid">✓ Valid</span></small>
+                    </div><br>
+                    <div>
+                        <strong>2. My Company Root CA v2</strong><br>
+                        <small>ID: f0368ae3-0c9e-79ed-74c3-caadd604343c</small><br>
+                        <small>Valid: 2025-08-12 10:13:43 UTC to 2026-08-12 10:14:13 UTC</small><br>
+                        <small><span class="status-valid">✓ Valid</span></small>
+                    </div><br>
+                </div>
+            </div>
+        </div>
+        <div class="timeline-container">
+            <h2>📅 Interactive Certificate Timeline</h2>
+            <p><strong>Timeline Range:</strong> 2025-07-24 19:35:50 UTC to 2026-08-30 16:38:54 UTC</p>
+            
+            <div class="timeline-controls">
+                <span style="font-weight: bold; margin-right: 15px;">Filter:</span>
+                <div class="timeline-control active" onclick="filterTimeline('all')">All Certificates</div>
+                <div class="timeline-control" onclick="filterTimeline('valid')">Valid</div>
+                <div class="timeline-control" onclick="filterTimeline('warning')">Expiring Soon</div>
+                <div class="timeline-control" onclick="filterTimeline('expired')">Expired</div>
+                <div class="timeline-control" onclick="filterTimeline('root_ca')">Root CAs</div>
+                <div class="timeline-control" onclick="filterTimeline('intermediate')">Intermediates</div>
+            </div>
+            
+            <div class="timeline-visual">
+                <div class="timeline-header">
+                    Certificate Name                                   Timeline                                           Status
+                    -------------------------------------------------- -------------------------------------------------- ---------------
+                </div>
+                <div class="cert-row" data-status="valid" data-type="root_ca">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki-intermediate (Main CA)</strong><br>
+            <strong>Type:</strong> Root Ca<br>
+            <strong>Valid From:</strong> 2025-08-12 03:02:07 UTC<br>
+            <strong>Valid Until:</strong> 2025-12-10 03:02:37 UTC<br>
+            <strong>Engine:</strong> pki-intermediate<br>
+            <strong>Namespace:</strong> root<br>
+            
+            
+            <strong>Status:</strong> ✓ 117d left
+        `)"
+                          onmouseout="hideTooltip()">📜 pki-intermediate (Main CA)</span>
+                    <span class="cert-timeline">  │██████████████┤                                </span>
+                    <span class="cert-status">✓ 117d left</span>
+                </div>
+                <div class="cert-row" data-status="valid" data-type="root_ca">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki (Main CA)</strong><br>
+            <strong>Type:</strong> Root Ca<br>
+            <strong>Valid From:</strong> 2025-08-12 10:13:43 UTC<br>
+            <strong>Valid Until:</strong> 2026-08-12 10:14:13 UTC<br>
+            <strong>Engine:</strong> pki<br>
+            <strong>Namespace:</strong> root<br>
+            
+            
+            <strong>Status:</strong> ✓ 362d left
+        `)"
+                          onmouseout="hideTooltip()">📜 pki (Main CA)</span>
+                    <span class="cert-timeline">  │████████████████████████████████████████████┤  </span>
+                    <span class="cert-status">✓ 362d left</span>
+                </div>
+                <div class="cert-row" data-status="valid" data-type="intermediate">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki/My Root CA</strong><br>
+            <strong>Type:</strong> Intermediate<br>
+            <strong>Valid From:</strong> 2025-08-12 02:00:32 UTC<br>
+            <strong>Valid Until:</strong> 2026-08-12 02:01:02 UTC<br>
+            <strong>Engine:</strong> pki<br>
+            <strong>Namespace:</strong> root<br>
+            <strong>Description:</strong> Issuer in pki<br>
+            <strong>Issuer ID:</strong> ee65eb03-8490-8712-e4e1-4a17daa78aa4<br>
+            <strong>Status:</strong> ✓ 362d left
+        `)"
+                          onmouseout="hideTooltip()">pki/My Root CA</span>
+                    <span class="cert-timeline">  │████████████████████████████████████████████┤  </span>
+                    <span class="cert-status">✓ 362d left</span>
+                </div>
+                <div class="cert-row" data-status="valid" data-type="intermediate">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki-intermediate/My Intermediate CA</strong><br>
+            <strong>Type:</strong> Intermediate<br>
+            <strong>Valid From:</strong> 2025-08-12 02:40:24 UTC<br>
+            <strong>Valid Until:</strong> 2026-08-12 02:01:02 UTC<br>
+            <strong>Engine:</strong> pki-intermediate<br>
+            <strong>Namespace:</strong> root<br>
+            <strong>Description:</strong> Issuer in pki-intermediate<br>
+            <strong>Issuer ID:</strong> 8d704100-dc03-3d13-4bf3-a35bdba2594b<br>
+            <strong>Status:</strong> ✓ 362d left
+        `)"
+                          onmouseout="hideTooltip()">pki-intermediate/My Intermediate CA</span>
+                    <span class="cert-timeline">  │████████████████████████████████████████████┤  </span>
+                    <span class="cert-status">✓ 362d left</span>
+                </div>
+                <div class="cert-row" data-status="valid" data-type="intermediate">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki-intermediate/My Intermediate CA</strong><br>
+            <strong>Type:</strong> Intermediate<br>
+            <strong>Valid From:</strong> 2025-08-12 02:41:08 UTC<br>
+            <strong>Valid Until:</strong> 2026-08-12 02:01:02 UTC<br>
+            <strong>Engine:</strong> pki-intermediate<br>
+            <strong>Namespace:</strong> root<br>
+            <strong>Description:</strong> Issuer in pki-intermediate<br>
+            <strong>Issuer ID:</strong> addf5c74-3eff-70fb-b562-d3f5c2ef2f2c<br>
+            <strong>Status:</strong> ✓ 362d left
+        `)"
+                          onmouseout="hideTooltip()">pki-intermediate/My Intermediate CA</span>
+                    <span class="cert-timeline">  │████████████████████████████████████████████┤  </span>
+                    <span class="cert-status">✓ 362d left</span>
+                </div>
+                <div class="cert-row" data-status="valid" data-type="intermediate">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki-intermediate/My Intermediate CA</strong><br>
+            <strong>Type:</strong> Intermediate<br>
+            <strong>Valid From:</strong> 2025-08-12 03:02:07 UTC<br>
+            <strong>Valid Until:</strong> 2025-12-10 03:02:37 UTC<br>
+            <strong>Engine:</strong> pki-intermediate<br>
+            <strong>Namespace:</strong> root<br>
+            <strong>Description:</strong> Issuer in pki-intermediate<br>
+            <strong>Issuer ID:</strong> 93e631d2-09e0-48c9-976f-552815e24f79<br>
+            <strong>Status:</strong> ✓ 117d left
+        `)"
+                          onmouseout="hideTooltip()">pki-intermediate/My Intermediate CA</span>
+                    <span class="cert-timeline">  │██████████████┤                                </span>
+                    <span class="cert-status">✓ 117d left</span>
+                </div>
+                <div class="cert-row" data-status="valid" data-type="intermediate">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki/My Company Root CA v2</strong><br>
+            <strong>Type:</strong> Intermediate<br>
+            <strong>Valid From:</strong> 2025-08-12 10:13:43 UTC<br>
+            <strong>Valid Until:</strong> 2026-08-12 10:14:13 UTC<br>
+            <strong>Engine:</strong> pki<br>
+            <strong>Namespace:</strong> root<br>
+            <strong>Description:</strong> Issuer in pki<br>
+            <strong>Issuer ID:</strong> f0368ae3-0c9e-79ed-74c3-caadd604343c<br>
+            <strong>Status:</strong> ✓ 362d left
+        `)"
+                          onmouseout="hideTooltip()">pki/My Company Root CA v2</span>
+                    <span class="cert-timeline">  │████████████████████████████████████████████┤  </span>
+                    <span class="cert-status">✓ 362d left</span>
+                </div>
+                <div class="cert-row" data-status="valid" data-type="intermediate">
+                    <span class="cert-name" 
+                          onmouseover="showTooltip(event, `
+            <strong>pki-intermediate/My Intermediate CA 2</strong><br>
+            <strong>Type:</strong> Intermediate<br>
+            <strong>Valid From:</strong> 2025-08-12 10:14:57 UTC<br>
+            <strong>Valid Until:</strong> 2025-12-10 10:15:27 UTC<br>
+            <strong>Engine:</strong> pki-intermediate<br>
+            <strong>Namespace:</strong> root<br>
+            <strong>Description:</strong> Issuer in pki-intermediate<br>
+            <strong>Issuer ID:</strong> db3d9bf5-e279-e2a9-38d3-0040f8092014<br>
+            <strong>Status:</strong> ✓ 117d left
+        `)"
+                          onmouseout="hideTooltip()">pki-intermediate/My Intermediate CA 2</span>
+                    <span class="cert-timeline">  │██████████████┤                                </span>
+                    <span class="cert-status">✓ 117d left</span>
+                </div>
+            </div>
+            <div class="legend">
+                <strong>Interactive Timeline Legend:</strong><br>
+                📜       Root CA certificate (click for details)<br>
+                ↳        Intermediate CA (signed by parent)<br>
+                │        Hierarchy connection<br>
+                ├████████┤  Certificate validity period<br>
+                ●        Current time (within validity)<br>
+                │        Current time (outside validity)<br>
+                ✓        Valid (>90 days remaining)<br>
+                ⚡       Expires soon (30-90 days)<br>
+                ⚠️        Critical (< 30 days)<br><br>
+                <strong>Hover over certificate names for detailed information</strong>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Report generated by Vault PKI Manager on 2025-08-14 19:48:57 UTC</p>
+        </div>
+    </div>
+    
+    <script>
+        // Collapsible PKI Engine functionality
+        function toggleEngine(engineId) {
+            const content = document.getElementById('content-' + engineId);
+            const indicator = document.getElementById('indicator-' + engineId);
+            
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                indicator.classList.remove('collapsed');
+                indicator.textContent = '▼';
+            } else {
+                content.classList.add('collapsed');
+                indicator.classList.add('collapsed');
+                indicator.textContent = '▶';
+            }
+        }
+        
+        // Timeline filtering functionality
+        function filterTimeline(filter) {
+            const rows = document.querySelectorAll('.cert-row');
+            const controls = document.querySelectorAll('.timeline-control');
+            
+            // Update active control
+            controls.forEach(control => control.classList.remove('active'));
+            document.querySelector(`[onclick="filterTimeline('${filter}')"]`).classList.add('active');
+            
+            rows.forEach(row => {
+                const status = row.getAttribute('data-status');
+                if (filter === 'all' || status === filter) {
+                    row.style.display = 'block';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+        
+        // Certificate tooltip functionality
+        let tooltip = null;
+        
+        function showTooltip(event, certData) {
+            hideTooltip();
+            
+            tooltip = document.createElement('div');
+            tooltip.className = 'cert-tooltip';
+            tooltip.innerHTML = certData;
+            document.body.appendChild(tooltip);
+            
+            const rect = event.target.getBoundingClientRect();
+            tooltip.style.left = (rect.left + window.scrollX) + 'px';
+            tooltip.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+            tooltip.style.display = 'block';
+        }
+        
+        function hideTooltip() {
+            if (tooltip) {
+                document.body.removeChild(tooltip);
+                tooltip = null;
+            }
+        }
+        
+        // Expand/Collapse all engines
+        function toggleAllEngines(expand) {
+            const engines = document.querySelectorAll('.engine-content');
+            const indicators = document.querySelectorAll('.collapse-indicator');
+            
+            engines.forEach((content, index) => {
+                const indicator = indicators[index];
+                if (expand) {
+                    content.classList.remove('collapsed');
+                    indicator.classList.remove('collapsed');
+                    indicator.textContent = '▼';
+                } else {
+                    content.classList.add('collapsed');
+                    indicator.classList.add('collapsed');
+                    indicator.textContent = '▶';
+                }
+            });
+        }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add global controls
+            const header = document.querySelector('h2');
+            if (header && header.textContent.includes('PKI Secrets Engines')) {
+                const controls = document.createElement('div');
+                controls.style.marginTop = '10px';
+                controls.innerHTML = `
+                    <button onclick="toggleAllEngines(true)" style="margin-right: 10px; padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 4px; background: white; cursor: pointer;">Expand All</button>
+                    <button onclick="toggleAllEngines(false)" style="padding: 5px 10px; border: 1px solid #dee2e6; border-radius: 4px; background: white; cursor: pointer;">Collapse All</button>
+                `;
+                header.appendChild(controls);
+            }
+        });
+        
+        // Hide tooltip when clicking elsewhere
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.cert-row')) {
+                hideTooltip();
+            }
+        });
+    </script>
+</body>
+</html>

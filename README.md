@@ -105,6 +105,13 @@ python main.py scan --html-output report.html --html-only
 python main.py scan --html-output report.html --width 100
 ```
 
+**Interactive HTML Features:**
+- **Collapsible PKI Engines**: Click on engine headers to expand/collapse details
+- **Interactive Timeline**: Filter certificates by status (valid, expiring, expired) or type (root CA, intermediate)
+- **Certificate Tooltips**: Hover over certificate names for detailed information
+- **Global Controls**: Expand/collapse all engines with dedicated buttons
+- **Responsive Design**: Optimized for both desktop and mobile viewing
+
 ### Root CA Management
 
 #### Create Root CA
@@ -204,14 +211,22 @@ Legend:
 
 ### HTML Output
 
-The HTML output provides a professional, web-viewable report with:
+The HTML output provides a professional, web-viewable report with interactive features:
 
 - **Responsive Design**: Works on desktop and mobile devices
-- **Interactive Elements**: Hover effects and professional styling
+- **Collapsible Sections**: Click PKI engine headers to expand/collapse details
+- **Interactive Timeline**: Filter certificates by status or type with one-click controls
+- **Smart Tooltips**: Hover over certificate names for comprehensive details
 - **Color-Coded Status**: Visual indicators for certificate health
 - **Namespace Support**: Clear namespace identification for Enterprise
-- **Timeline Visualization**: Graphical representation of certificate lifecycles
+- **Timeline Visualization**: Interactive graphical representation of certificate lifecycles
 - **Professional Formatting**: Clean, modern design suitable for stakeholder reports
+
+**Interactive Controls:**
+- **Engine Cards**: Collapsible sections with visual expand/collapse indicators
+- **Timeline Filters**: All Certificates, Valid, Expiring Soon, Expired, Root CAs, Intermediates
+- **Global Actions**: Expand All / Collapse All buttons for quick navigation
+- **Certificate Details**: Rich tooltips showing validity, type, namespace, and status information
 
 ## SSL/TLS Security
 
