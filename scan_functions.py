@@ -571,3 +571,525 @@ def print_pki_scan_results(scan_data: Dict[str, Any], timeline_width: int = 50) 
         output_lines.append(timeline_output)
     
     return '\n'.join(output_lines)
+
+
+def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) -> str:
+    """
+    Generate an HTML report for PKI scan results.
+    
+    Args:
+        scan_data: Dictionary containing vault info and PKI engine information
+        timeline_width: Width of the timeline visualization in characters
+        
+    Returns:
+        Complete HTML document as a string
+    """
+    import datetime
+    from utils import format_datetime
+    
+    # Extract data from the scan results
+    vault_version = scan_data.get('vault_version', 'Unknown')
+    is_enterprise = scan_data.get('is_enterprise', False)
+    scanned_namespaces = scan_data.get('scanned_namespaces', ['root'])
+    all_namespaces_scan = scan_data.get('all_namespaces_scan', False)
+    pki_engines = scan_data.get('pki_engines', [])
+    
+    # Generate timestamp
+    report_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+    
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vault PKI Manager Report</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }}
+        h1 {{
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }}
+        h2 {{
+            color: #34495e;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin-top: 30px;
+        }}
+        h3 {{
+            color: #2c3e50;
+            margin-top: 25px;
+        }}
+        .vault-info {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }}
+        .vault-info h2 {{
+            color: white;
+            border-left: 4px solid #ffffff;
+            margin-top: 0;
+        }}
+        .engine-card {{
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin: 15px 0;
+            padding: 20px;
+            background: #fdfdfd;
+            transition: box-shadow 0.3s ease;
+        }}
+        .engine-card:hover {{
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }}
+        .engine-title {{
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }}
+        .namespace-badge {{
+            background: #3498db;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }}
+        .status-valid {{
+            color: #27ae60;
+            font-weight: bold;
+        }}
+        .status-warning {{
+            color: #f39c12;
+            font-weight: bold;
+        }}
+        .status-expired {{
+            color: #e74c3c;
+            font-weight: bold;
+        }}
+        .status-configured {{
+            color: #27ae60;
+        }}
+        .status-not-configured {{
+            color: #e74c3c;
+        }}
+        .timeline-container {{
+            margin: 30px 0;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }}
+        .timeline-bar {{
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre;
+            overflow-x: auto;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }}
+        .cert-name {{
+            display: inline-block;
+            width: 300px;
+            vertical-align: top;
+            padding-right: 10px;
+        }}
+        .timeline-row {{
+            margin: 2px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }}
+        .legend {{
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }}
+        .issuer-list {{
+            margin-left: 20px;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #3498db;
+        }}
+        .footer {{
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }}
+        .no-engines {{
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+            padding: 40px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Vault PKI Manager Report</h1>
+        
+        <div class="vault-info">
+            <h2>📊 Vault Information</h2>
+            <p><strong>Version:</strong> {vault_version}</p>"""
+    
+    if is_enterprise:
+        html_content += f"""
+            <p><strong>Edition:</strong> ✓ Vault Enterprise</p>"""
+        if all_namespaces_scan:
+            html_content += f"""
+            <p><strong>Scanned Namespaces:</strong> {', '.join(scanned_namespaces)} ({len(scanned_namespaces)} total)</p>"""
+        else:
+            html_content += f"""
+            <p><strong>Namespace:</strong> {scanned_namespaces[0] if scanned_namespaces else 'root'}</p>"""
+    else:
+        html_content += f"""
+            <p><strong>Edition:</strong> ℹ️ Vault Open Source</p>"""
+        if len(scanned_namespaces) > 1 or (scanned_namespaces and scanned_namespaces[0] != 'root'):
+            html_content += f"""
+            <p><strong>Namespace:</strong> {scanned_namespaces[0] if scanned_namespaces else 'root'} <em>(Note: Namespaces are Enterprise feature)</em></p>"""
+    
+    html_content += f"""
+        </div>
+        
+        <h2>🏛️ PKI Secrets Engines ({len(pki_engines)} found)</h2>"""
+    
+    if not pki_engines:
+        html_content += """
+        <div class="no-engines">
+            <p>No PKI secrets engines found.</p>
+        </div>"""
+    else:
+        # Add PKI engines information
+        for i, engine in enumerate(pki_engines, 1):
+            engine_namespace = engine.get('namespace', 'root')
+            namespace_badge = ""
+            if all_namespaces_scan or engine_namespace != 'root':
+                namespace_badge = f'<span class="namespace-badge">{engine_namespace}</span>'
+            
+            ca_status = "status-configured" if engine['ca_certificate'] else "status-not-configured"
+            ca_text = "✓ Configured" if engine['ca_certificate'] else "✗ Not configured"
+            
+            html_content += f"""
+        <div class="engine-card">
+            <div class="engine-title">{i}. PKI Engine: {engine['path']}{namespace_badge}</div>
+            <p><strong>Description:</strong> {engine['description'] or 'No description'}</p>
+            <p><strong>Accessor:</strong> {engine['accessor']}</p>
+            <p><strong>CA Certificate:</strong> <span class="{ca_status}">{ca_text}</span></p>"""
+            
+            if engine['ca_certificate']:
+                start_date = format_datetime(engine.get('cert_not_before'))
+                end_date = format_datetime(engine.get('cert_not_after'))
+                html_content += f"""
+            <p><strong>Valid from:</strong> {start_date}</p>
+            <p><strong>Valid until:</strong> {end_date}</p>"""
+                
+                # Check expiration status
+                if engine.get('cert_not_after'):
+                    cert_expiry = engine['cert_not_after']
+                    if cert_expiry.tzinfo is None:
+                        cert_expiry = cert_expiry.replace(tzinfo=datetime.timezone.utc)
+                    
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    days_until_expiry = (cert_expiry - now).days
+                    
+                    if days_until_expiry < 0:
+                        status_class = "status-expired"
+                        status_text = f"⚠️ EXPIRED {abs(days_until_expiry)} days ago"
+                    elif days_until_expiry < 30:
+                        status_class = "status-expired"
+                        status_text = f"⚠️ Expires in {days_until_expiry} days"
+                    elif days_until_expiry < 90:
+                        status_class = "status-warning"
+                        status_text = f"⚡ Expires in {days_until_expiry} days"
+                    else:
+                        status_class = "status-valid"
+                        status_text = f"✓ {days_until_expiry} days remaining"
+                    
+                    html_content += f"""
+            <p><strong>Status:</strong> <span class="{status_class}">{status_text}</span></p>"""
+            
+            # Roles
+            if engine['roles']:
+                html_content += f"""
+            <p><strong>Roles:</strong> {', '.join(engine['roles'])}</p>"""
+            else:
+                html_content += f"""
+            <p><strong>Roles:</strong> None configured</p>"""
+            
+            # Issuers
+            if engine.get('issuers'):
+                html_content += f"""
+            <h3>📜 Issuers ({len(engine['issuers'])} certificate(s))</h3>
+            <div class="issuer-list">"""
+                
+                for j, issuer in enumerate(engine['issuers'], 1):
+                    issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
+                    html_content += f"""
+                <div>
+                    <strong>{j}. {issuer_name}</strong><br>
+                    <small>ID: {issuer['id']}</small><br>"""
+                    
+                    if issuer.get('not_before') and issuer.get('not_after'):
+                        start_date = format_datetime(issuer['not_before'])
+                        end_date = format_datetime(issuer['not_after'])
+                        html_content += f"""
+                    <small>Valid: {start_date} to {end_date}</small><br>"""
+                        
+                        # Check issuer expiration status
+                        cert_expiry = issuer['not_after']
+                        if cert_expiry.tzinfo is None:
+                            cert_expiry = cert_expiry.replace(tzinfo=datetime.timezone.utc)
+                        
+                        now = datetime.datetime.now(datetime.timezone.utc)
+                        days_until_expiry = (cert_expiry - now).days
+                        
+                        if days_until_expiry < 0:
+                            status_class = "status-expired"
+                            status_text = f"⚠️ EXPIRED {abs(days_until_expiry)} days ago"
+                        elif days_until_expiry < 30:
+                            status_class = "status-expired"
+                            status_text = f"⚠️ Expires in {days_until_expiry} days"
+                        elif days_until_expiry < 90:
+                            status_class = "status-warning"
+                            status_text = f"⚡ Expires in {days_until_expiry} days"
+                        else:
+                            status_class = "status-valid"
+                            status_text = f"✓ Valid"
+                        
+                        html_content += f"""
+                    <small><span class="{status_class}">{status_text}</span></small>"""
+                    else:
+                        html_content += f"""
+                    <small>Valid: Unknown</small>"""
+                    
+                    html_content += """
+                </div><br>"""
+                
+                html_content += """
+            </div>"""
+            else:
+                html_content += f"""
+            <p><strong>Issuers:</strong> None found</p>"""
+            
+            html_content += """
+        </div>"""
+        
+        # Add timeline visualization
+        timeline_html = _generate_html_timeline(pki_engines, timeline_width, all_namespaces_scan)
+        html_content += timeline_html
+    
+    html_content += f"""
+        <div class="footer">
+            <p>Report generated by Vault PKI Manager on {report_time}</p>
+        </div>
+    </div>
+</body>
+</html>"""
+    
+    return html_content
+
+
+def _generate_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
+    """
+    Generate HTML timeline visualization.
+    
+    Args:
+        pki_engines: List of PKI engine information dictionaries
+        timeline_width: Width of the timeline in characters
+        all_namespaces: Whether this is an all-namespaces scan
+        
+    Returns:
+        HTML string containing the timeline visualization
+    """
+    import datetime
+    from utils import format_datetime
+    
+    # Collect all certificates (reusing logic from text timeline)
+    certs = []
+    ca_engines = {}
+    
+    for engine in pki_engines:
+        if engine.get('cert_not_before') and engine.get('cert_not_after'):
+            engine_namespace = engine.get('namespace', 'root')
+            if all_namespaces and engine_namespace != 'root':
+                cert_name = f"{engine_namespace}::{engine['path']} (Main CA)"
+            else:
+                cert_name = f"{engine['path']} (Main CA)"
+            
+            cert_entry = {
+                'name': cert_name,
+                'not_before': engine['cert_not_before'],
+                'not_after': engine['cert_not_after'],
+                'engine_path': engine['path'],
+                'namespace': engine_namespace,
+                'cert_type': 'root_ca',
+                'parent_ca': None
+            }
+            certs.append(cert_entry)
+            ca_engines[engine['path']] = cert_entry
+        
+        for issuer in engine.get('issuers', []):
+            if issuer.get('not_before') and issuer.get('not_after'):
+                issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
+                engine_namespace = engine.get('namespace', 'root')
+                
+                is_intermediate = engine['path'] not in ca_engines or len(engine.get('issuers', [])) > 1
+                
+                if all_namespaces and engine_namespace != 'root':
+                    full_name = f"{engine_namespace}::{engine['path']}/{issuer_name}"
+                else:
+                    full_name = f"{engine['path']}/{issuer_name}"
+                
+                cert_entry = {
+                    'name': full_name,
+                    'not_before': issuer['not_before'],
+                    'not_after': issuer['not_after'],
+                    'engine_path': engine['path'],
+                    'namespace': engine_namespace,
+                    'cert_type': 'intermediate' if is_intermediate else 'issuer',
+                    'parent_ca': None
+                }
+                certs.append(cert_entry)
+    
+    if not certs:
+        return ""
+    
+    # Normalize timezone for all certificates
+    for cert in certs:
+        if cert['not_before'].tzinfo is None:
+            cert['not_before'] = cert['not_before'].replace(tzinfo=datetime.timezone.utc)
+        if cert['not_after'].tzinfo is None:
+            cert['not_after'] = cert['not_after'].replace(tzinfo=datetime.timezone.utc)
+    
+    # Calculate timeline
+    all_start_dates = [cert['not_before'] for cert in certs]
+    all_end_dates = [cert['not_after'] for cert in certs]
+    
+    earliest_start = min(all_start_dates)
+    latest_end = max(all_end_dates)
+    
+    time_range = latest_end - earliest_start
+    padding = time_range * 0.05
+    timeline_start = earliest_start - padding
+    timeline_end = latest_end + padding
+    timeline_duration = timeline_end - timeline_start
+    
+    # Sort certificates
+    def sort_key(cert):
+        if cert['cert_type'] == 'root_ca':
+            return (0, cert['not_before'])
+        elif cert['cert_type'] == 'intermediate':
+            return (1, cert['not_before'])
+        else:
+            return (2, cert['not_before'])
+    
+    sorted_certs = sorted(certs, key=sort_key)
+    
+    html = f"""
+        <div class="timeline-container">
+            <h2>📅 Certificate Validity Timeline</h2>
+            <p><strong>Timeline:</strong> {format_datetime(timeline_start)} to {format_datetime(timeline_end)}</p>
+            <div class="timeline-bar">"""
+    
+    # Header
+    html += f"{'Certificate Name':<50} {'Timeline':<{timeline_width}} {'Status'}\n"
+    html += f"{'-'*50} {'-'*timeline_width} {'-'*15}\n"
+    
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    for cert in sorted_certs:
+        # Calculate positions
+        start_pos = int((cert['not_before'] - timeline_start) / timeline_duration * timeline_width)
+        end_pos = int((cert['not_after'] - timeline_start) / timeline_duration * timeline_width)
+        now_pos = int((now - timeline_start) / timeline_duration * timeline_width)
+        
+        start_pos = max(0, min(start_pos, timeline_width - 1))
+        end_pos = max(0, min(end_pos, timeline_width - 1))
+        now_pos = max(0, min(now_pos, timeline_width - 1))
+        
+        # Create timeline
+        timeline = [' '] * timeline_width
+        
+        for i in range(start_pos, min(end_pos + 1, timeline_width)):
+            timeline[i] = '█'
+        
+        if start_pos < timeline_width:
+            timeline[start_pos] = '├'
+        if end_pos < timeline_width and end_pos != start_pos:
+            timeline[end_pos] = '┤'
+        
+        if 0 <= now_pos < timeline_width:
+            if timeline[now_pos] == '█':
+                timeline[now_pos] = '●'
+            else:
+                timeline[now_pos] = '│'
+        
+        # Status
+        if now < cert['not_before']:
+            status = "Future"
+        elif now > cert['not_after']:
+            days_expired = (now - cert['not_after']).days
+            status = f"EXPIRED ({days_expired}d)"
+        else:
+            days_remaining = (cert['not_after'] - now).days
+            if days_remaining < 30:
+                status = f"⚠️ {days_remaining}d left"
+            elif days_remaining < 90:
+                status = f"⚡ {days_remaining}d left"
+            else:
+                status = f"✓ {days_remaining}d left"
+        
+        # Format name
+        cert_name = cert['name']
+        if len(cert_name) > 48:
+            cert_name = cert_name[:45] + "..."
+        
+        if cert['cert_type'] == 'intermediate' and cert['parent_ca']:
+            cert_name = f"  ↳ {cert_name}"
+        elif cert['cert_type'] == 'root_ca':
+            cert_name = f"📜 {cert_name}"
+        
+        timeline_str = ''.join(timeline)
+        html += f"{cert_name:<50} {timeline_str:<{timeline_width}} {status}\n"
+    
+    html += """</div>
+            <div class="legend">
+                <strong>Legend:</strong><br>
+                📜       Root CA certificate<br>
+                ↳        Intermediate CA (signed by parent)<br>
+                │        Hierarchy connection<br>
+                ├████████┤  Certificate validity period<br>
+                ●        Current time (within validity)<br>
+                │        Current time (outside validity)<br>
+                ✓        Valid (>90 days remaining)<br>
+                ⚡       Expires soon (30-90 days)<br>
+                ⚠️        Critical (< 30 days)
+            </div>
+        </div>"""
+    
+    return html

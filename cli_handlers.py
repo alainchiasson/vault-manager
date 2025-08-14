@@ -42,6 +42,8 @@ def setup_scan_parser(subparsers):
     scan_parser.add_argument('--width', type=int, help='Custom timeline width in characters (overrides --wide)')
     scan_parser.add_argument('--namespace', help='Vault namespace to scan (Enterprise feature)')
     scan_parser.add_argument('--all-namespaces', action='store_true', help='Scan all namespaces (Enterprise feature, overrides --namespace)')
+    scan_parser.add_argument('--html-output', type=str, help='Generate HTML report file (e.g., --html-output report.html)')
+    scan_parser.add_argument('--html-only', action='store_true', help='Only generate HTML output, suppress text output')
 
 
 def setup_create_root_ca_parser(subparsers):
@@ -146,8 +148,24 @@ def handle_scan_command(client: hvac.Client, args) -> int:
             print("\nScanning for PKI secrets engines...")
             scan_data = scan_pki_secrets_engines(client, all_namespaces=False)
         
-        scan_results = print_pki_scan_results(scan_data, timeline_width)
-        print(scan_results)
+        # Generate text output (unless html-only is specified)
+        if not args.html_only:
+            scan_results = print_pki_scan_results(scan_data, timeline_width)
+            print(scan_results)
+        
+        # Generate HTML output if requested
+        if args.html_output:
+            from scan_functions import generate_html_report
+            html_content = generate_html_report(scan_data, timeline_width)
+            
+            try:
+                with open(args.html_output, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                print(f"📄 HTML report generated: {args.html_output}")
+            except Exception as e:
+                print(f"❌ Error writing HTML file: {e}")
+                return 1
+        
         return 0
     except Exception as e:
         print(f"Error during scan: {e}")
