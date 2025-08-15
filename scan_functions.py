@@ -964,9 +964,9 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
                         <span class="{ca_status}">{ca_text}</span>
                     </span>
                 </div>
-                <div class="collapse-indicator" id="indicator-{i}">▼</div>
+                <div class="collapse-indicator collapsed" id="indicator-{i}">▶</div>
             </div>
-            <div class="engine-content" id="content-{i}">
+            <div class="engine-content collapsed" id="content-{i}">
                 <p><strong>Description:</strong> {engine['description'] or 'No description'}</p>
                 <p><strong>Accessor:</strong> {engine['accessor']}</p>
                 <p><strong>CA Certificate:</strong> <span class="{ca_status}">{ca_text}</span></p>"""
