@@ -720,7 +720,6 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
         .status-not-configured {{
             color: #e74c3c;
         }}
-        
         /* Interactive Timeline Chart */
         .timeline-container {{
             margin: 30px 0;
@@ -771,8 +770,203 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
         }}
         #timelineChart {{
             width: 100%;
-            height: 400px;
+            height: 600px;
             cursor: crosshair;
+        }}
+        
+        /* PKI Groups Container */
+        .pki-groups-container {{
+            margin: 30px 0;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .pki-groups-container h3 {{
+            margin: 0 0 20px 0;
+            color: #2c3e50;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }}
+        
+        /* PKI Group Cards */
+        .pki-group-card {{
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin: 15px 0;
+            background: #fdfdfd;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }}
+        .pki-group-card:hover {{
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }}
+        .pki-group-header {{
+            padding: 15px 20px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s ease;
+        }}
+        .pki-group-header:hover {{
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        }}
+        .pki-group-title {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: bold;
+            color: #2c3e50;
+        }}
+        .pki-group-icon {{
+            font-size: 1.2em;
+        }}
+        .pki-group-name {{
+            font-size: 1.1em;
+        }}
+        .pki-group-badge {{
+            background: #6c757d;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: normal;
+        }}
+        .pki-group-status {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .status-count {{
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }}
+        .status-count.valid {{
+            background: #d4edda;
+            color: #155724;
+        }}
+        .status-count.warning {{
+            background: #fff3cd;
+            color: #856404;
+        }}
+        .status-count.critical {{
+            background: #f8d7da;
+            color: #721c24;
+        }}
+        .status-count.expired {{
+            background: #f5c6cb;
+            color: #491217;
+        }}
+        .pki-collapse-indicator {{
+            font-size: 1.2em;
+            color: #6c757d;
+            transition: transform 0.3s ease;
+            margin-left: 8px;
+        }}
+        .pki-collapse-indicator.collapsed {{
+            transform: rotate(-90deg);
+        }}
+        
+        /* PKI Group Content */
+        .pki-group-content {{
+            padding: 20px;
+            display: block;
+            background: #fafbfc;
+        }}
+        .pki-group-content.collapsed {{
+            display: none;
+        }}
+        .pki-group-description {{
+            color: #6c757d;
+            font-style: italic;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }}
+        
+        /* PKI Certificates List */
+        .pki-certificates-list {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+        .pki-cert-item {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 15px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #dee2e6;
+            transition: all 0.3s ease;
+        }}
+        .pki-cert-item:hover {{
+            background: #f8f9fa;
+            transform: translateX(5px);
+        }}
+        .pki-cert-item.valid {{
+            border-left-color: #28a745;
+        }}
+        .pki-cert-item.warning {{
+            border-left-color: #ffc107;
+        }}
+        .pki-cert-item.critical {{
+            border-left-color: #dc3545;
+        }}
+        .pki-cert-item.expired {{
+            border-left-color: #6c757d;
+        }}
+        .pki-cert-item.future {{
+            border-left-color: #007bff;
+        }}
+        .pki-cert-icon {{
+            font-size: 1.1em;
+            min-width: 20px;
+        }}
+        .pki-cert-name {{
+            font-weight: 500;
+            color: #2c3e50;
+            min-width: 200px;
+        }}
+        .pki-cert-validity {{
+            color: #6c757d;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+            flex: 1;
+        }}
+        .pki-cert-status {{
+            font-size: 0.9em;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 4px;
+            min-width: 120px;
+            text-align: center;
+        }}
+        .pki-cert-status.status-valid {{
+            background: #d4edda;
+            color: #155724;
+        }}
+        .pki-cert-status.status-warning {{
+            background: #fff3cd;
+            color: #856404;
+        }}
+        .pki-cert-status.status-critical {{
+            background: #f8d7da;
+            color: #721c24;
+        }}
+        .pki-cert-status.status-expired {{
+            background: #f5c6cb;
+            color: #491217;
+        }}
+        .pki-cert-status.status-future {{
+            background: #d1ecf1;
+            color: #0c5460;
         }}
         
         /* Chart Tooltip */
@@ -864,10 +1058,18 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
                 margin-bottom: 5px;
             }}
             #timelineChart {{
-                height: 300px;
+                height: 400px;
             }}
             .legend-grid {{
                 grid-template-columns: 1fr;
+            }}
+            .pki-cert-item {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }}
+            .pki-cert-validity {{
+                min-width: auto;
             }}
         }}
         
@@ -1177,7 +1379,7 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
 
 def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
     """
-    Generate interactive HTML timeline visualization with a proper chart view.
+    Generate interactive HTML timeline visualization with hierarchical PKI engine grouping.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
@@ -1185,119 +1387,131 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
         all_namespaces: Whether this is an all-namespaces scan
         
     Returns:
-        HTML string containing the interactive chart timeline visualization
+        HTML string containing the interactive chart timeline visualization with collapsible PKI groups
     """
     import datetime
     import json
     from utils import format_datetime
     
-    # Collect all certificates (reusing logic from text timeline)
-    certs = []
-    ca_engines = {}
+    if not pki_engines:
+        return ""
     
-    for engine in pki_engines:
+    # Organize certificates by PKI engine with hierarchy
+    pki_groups = []
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    for engine_idx, engine in enumerate(pki_engines):
+        engine_namespace = engine.get('namespace', 'root')
+        if all_namespaces and engine_namespace != 'root':
+            engine_display_name = f"{engine_namespace}::{engine['path']}"
+        else:
+            engine_display_name = engine['path']
+        
+        # Create PKI engine group
+        engine_group = {
+            'id': f"pki-group-{engine_idx}",
+            'name': engine_display_name,
+            'namespace': engine_namespace,
+            'description': engine.get('description', ''),
+            'certificates': []
+        }
+        
+        # Add main CA certificate if available
         if engine.get('cert_not_before') and engine.get('cert_not_after'):
-            engine_namespace = engine.get('namespace', 'root')
-            if all_namespaces and engine_namespace != 'root':
-                cert_name = f"{engine_namespace}::{engine['path']} (Main CA)"
-            else:
-                cert_name = f"{engine['path']} (Main CA)"
-            
-            cert_entry = {
-                'name': cert_name,
-                'not_before': engine['cert_not_before'],
-                'not_after': engine['cert_not_after'],
+            main_ca_cert = {
+                'name': f"{engine_display_name} (Main CA)",
+                'start': engine['cert_not_before'].isoformat() if engine['cert_not_before'].tzinfo else engine['cert_not_before'].replace(tzinfo=datetime.timezone.utc).isoformat(),
+                'end': engine['cert_not_after'].isoformat() if engine['cert_not_after'].tzinfo else engine['cert_not_after'].replace(tzinfo=datetime.timezone.utc).isoformat(),
+                'type': 'root_ca',
                 'engine_path': engine['path'],
                 'namespace': engine_namespace,
-                'cert_type': 'root_ca',
-                'parent_ca': None,
                 'description': engine.get('description', ''),
-                'accessor': engine.get('accessor', '')
+                'accessor': engine.get('accessor', ''),
+                'is_main_ca': True
             }
-            certs.append(cert_entry)
-            ca_engines[engine['path']] = cert_entry
+            
+            # Calculate status
+            cert_start = datetime.datetime.fromisoformat(main_ca_cert['start'])
+            cert_end = datetime.datetime.fromisoformat(main_ca_cert['end'])
+            
+            if now < cert_start:
+                main_ca_cert['status'] = "Future"
+                main_ca_cert['status_class'] = "future"
+            elif now > cert_end:
+                days_expired = (now - cert_end).days
+                main_ca_cert['status'] = f"EXPIRED ({days_expired}d)"
+                main_ca_cert['status_class'] = "expired"
+            else:
+                days_remaining = (cert_end - now).days
+                if days_remaining < 30:
+                    main_ca_cert['status'] = f"Critical ({days_remaining}d left)"
+                    main_ca_cert['status_class'] = "critical"
+                elif days_remaining < 90:
+                    main_ca_cert['status'] = f"Warning ({days_remaining}d left)"
+                    main_ca_cert['status_class'] = "warning"
+                else:
+                    main_ca_cert['status'] = f"Valid ({days_remaining}d left)"
+                    main_ca_cert['status_class'] = "valid"
+            
+            main_ca_cert['days_remaining'] = (cert_end - now).days if now <= cert_end else -(now - cert_end).days
+            engine_group['certificates'].append(main_ca_cert)
         
+        # Add all issuers
         for issuer in engine.get('issuers', []):
             if issuer.get('not_before') and issuer.get('not_after'):
                 issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
-                engine_namespace = engine.get('namespace', 'root')
                 
-                is_intermediate = engine['path'] not in ca_engines or len(engine.get('issuers', [])) > 1
-                
-                if all_namespaces and engine_namespace != 'root':
-                    full_name = f"{engine_namespace}::{engine['path']}/{issuer_name}"
-                else:
-                    full_name = f"{engine['path']}/{issuer_name}"
-                
-                cert_entry = {
-                    'name': full_name,
-                    'not_before': issuer['not_before'],
-                    'not_after': issuer['not_after'],
+                issuer_cert = {
+                    'name': issuer_name,
+                    'start': issuer['not_before'].isoformat() if issuer['not_before'].tzinfo else issuer['not_before'].replace(tzinfo=datetime.timezone.utc).isoformat(),
+                    'end': issuer['not_after'].isoformat() if issuer['not_after'].tzinfo else issuer['not_after'].replace(tzinfo=datetime.timezone.utc).isoformat(),
+                    'type': 'issuer',
                     'engine_path': engine['path'],
                     'namespace': engine_namespace,
-                    'cert_type': 'intermediate' if is_intermediate else 'issuer',
-                    'parent_ca': None,
+                    'description': f"Issuer in {engine['path']}",
                     'issuer_id': issuer.get('id', ''),
-                    'description': f"Issuer in {engine['path']}"
+                    'is_main_ca': False
                 }
-                certs.append(cert_entry)
-    
-    if not certs:
-        return ""
-    
-    # Normalize timezone for all certificates and prepare data for JavaScript
-    chart_data = []
-    now = datetime.datetime.now(datetime.timezone.utc)
-    
-    for cert in certs:
-        if cert['not_before'].tzinfo is None:
-            cert['not_before'] = cert['not_before'].replace(tzinfo=datetime.timezone.utc)
-        if cert['not_after'].tzinfo is None:
-            cert['not_after'] = cert['not_after'].replace(tzinfo=datetime.timezone.utc)
+                
+                # Calculate status
+                cert_start = datetime.datetime.fromisoformat(issuer_cert['start'])
+                cert_end = datetime.datetime.fromisoformat(issuer_cert['end'])
+                
+                if now < cert_start:
+                    issuer_cert['status'] = "Future"
+                    issuer_cert['status_class'] = "future"
+                elif now > cert_end:
+                    days_expired = (now - cert_end).days
+                    issuer_cert['status'] = f"EXPIRED ({days_expired}d)"
+                    issuer_cert['status_class'] = "expired"
+                else:
+                    days_remaining = (cert_end - now).days
+                    if days_remaining < 30:
+                        issuer_cert['status'] = f"Critical ({days_remaining}d left)"
+                        issuer_cert['status_class'] = "critical"
+                    elif days_remaining < 90:
+                        issuer_cert['status'] = f"Warning ({days_remaining}d left)"
+                        issuer_cert['status_class'] = "warning"
+                    else:
+                        issuer_cert['status'] = f"Valid ({days_remaining}d left)"
+                        issuer_cert['status_class'] = "valid"
+                
+                issuer_cert['days_remaining'] = (cert_end - now).days if now <= cert_end else -(now - cert_end).days
+                engine_group['certificates'].append(issuer_cert)
         
-        # Determine status
-        if now < cert['not_before']:
-            status = "Future"
-            status_class = "future"
-        elif now > cert['not_after']:
-            days_expired = (now - cert['not_after']).days
-            status = f"EXPIRED ({days_expired}d)"
-            status_class = "expired"
-        else:
-            days_remaining = (cert['not_after'] - now).days
-            if days_remaining < 30:
-                status = f"Critical ({days_remaining}d left)"
-                status_class = "critical"
-            elif days_remaining < 90:
-                status = f"Warning ({days_remaining}d left)"
-                status_class = "warning"
-            else:
-                status = f"Valid ({days_remaining}d left)"
-                status_class = "valid"
-        
-        chart_data.append({
-            'name': cert['name'],
-            'start': cert['not_before'].isoformat(),
-            'end': cert['not_after'].isoformat(),
-            'type': cert['cert_type'],
-            'status': status,
-            'status_class': status_class,
-            'engine_path': cert['engine_path'],
-            'namespace': cert['namespace'],
-            'description': cert.get('description', ''),
-            'issuer_id': cert.get('issuer_id', ''),
-            'days_remaining': (cert['not_after'] - now).days if now <= cert['not_after'] else -(now - cert['not_after']).days
-        })
-    
-    # Sort certificates by type and start date
-    chart_data.sort(key=lambda x: (
-        0 if x['type'] == 'root_ca' else 1 if x['type'] == 'intermediate' else 2,
-        x['start']
-    ))
+        if engine_group['certificates']:  # Only add groups that have certificates
+            pki_groups.append(engine_group)
     
     # Calculate timeline bounds
-    all_starts = [datetime.datetime.fromisoformat(cert['start']) for cert in chart_data]
-    all_ends = [datetime.datetime.fromisoformat(cert['end']) for cert in chart_data]
+    all_certs = []
+    for group in pki_groups:
+        all_certs.extend(group['certificates'])
+    
+    if not all_certs:
+        return ""
+    
+    all_starts = [datetime.datetime.fromisoformat(cert['start']) for cert in all_certs]
+    all_ends = [datetime.datetime.fromisoformat(cert['end']) for cert in all_certs]
     
     timeline_start = min(all_starts)
     timeline_end = max(all_ends)
@@ -1321,12 +1535,71 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 <div class="timeline-control" onclick="filterTimelineChart('critical')">Critical</div>
                 <div class="timeline-control" onclick="filterTimelineChart('expired')">Expired</div>
                 <div class="timeline-control" onclick="filterTimelineChart('root_ca')">Root CAs</div>
-                <div class="timeline-control" onclick="filterTimelineChart('intermediate')">Intermediates</div>
+                <div class="timeline-control" onclick="filterTimelineChart('issuer')">Issuers</div>
+                <div style="margin-left: auto;">
+                    <button onclick="toggleAllPkiGroups(true)" class="timeline-control">Expand All</button>
+                    <button onclick="toggleAllPkiGroups(false)" class="timeline-control">Collapse All</button>
+                </div>
             </div>
             
             <div class="chart-container">
-                <canvas id="timelineChart" width="1000" height="400"></canvas>
+                <canvas id="timelineChart" width="1000" height="600"></canvas>
                 <div id="chartTooltip" class="chart-tooltip"></div>
+            </div>
+            
+            <!-- PKI Engine Groups for Certificate Organization -->
+            <div class="pki-groups-container">
+                <h3>📋 PKI Engine Certificate Groups</h3>"""
+    
+    for group_idx, group in enumerate(pki_groups):
+        total_certs = len(group['certificates'])
+        valid_certs = len([c for c in group['certificates'] if c['status_class'] == 'valid'])
+        warning_certs = len([c for c in group['certificates'] if c['status_class'] == 'warning'])
+        critical_certs = len([c for c in group['certificates'] if c['status_class'] == 'critical'])
+        expired_certs = len([c for c in group['certificates'] if c['status_class'] == 'expired'])
+        
+        html += f"""
+                <div class="pki-group-card" data-group-id="{group['id']}">
+                    <div class="pki-group-header" onclick="togglePkiGroup('{group['id']}')">
+                        <div class="pki-group-title">
+                            <span class="pki-group-icon">🏛️</span>
+                            <span class="pki-group-name">{group['name']}</span>
+                            <span class="pki-group-badge">{total_certs} cert{'s' if total_certs != 1 else ''}</span>
+                            {f'<span class="namespace-badge">{group["namespace"]}</span>' if group['namespace'] != 'root' else ''}
+                        </div>
+                        <div class="pki-group-status">
+                            {f'<span class="status-count valid">{valid_certs}✓</span>' if valid_certs > 0 else ''}
+                            {f'<span class="status-count warning">{warning_certs}⚡</span>' if warning_certs > 0 else ''}
+                            {f'<span class="status-count critical">{critical_certs}⚠️</span>' if critical_certs > 0 else ''}
+                            {f'<span class="status-count expired">{expired_certs}❌</span>' if expired_certs > 0 else ''}
+                            <span class="pki-collapse-indicator collapsed" id="pki-indicator-{group['id']}">▶</span>
+                        </div>
+                    </div>
+                    <div class="pki-group-content collapsed" id="pki-content-{group['id']}">
+                        <div class="pki-group-description">{group['description'] or 'No description'}</div>
+                        <div class="pki-certificates-list">"""
+        
+        for cert in group['certificates']:
+            cert_icon = '📜' if cert['is_main_ca'] else '📄'
+            status_class = f"status-{cert['status_class']}"
+            
+            html += f"""
+                            <div class="pki-cert-item {cert['status_class']}" data-cert-type="{cert['type']}" data-status="{cert['status_class']}">
+                                <span class="pki-cert-icon">{cert_icon}</span>
+                                <span class="pki-cert-name">{cert['name']}</span>
+                                <span class="pki-cert-validity">
+                                    {format_datetime(datetime.datetime.fromisoformat(cert['start']))} → 
+                                    {format_datetime(datetime.datetime.fromisoformat(cert['end']))}
+                                </span>
+                                <span class="pki-cert-status {status_class}">{cert['status']}</span>
+                            </div>"""
+        
+        html += f"""
+                        </div>
+                    </div>
+                </div>"""
+    
+    html += f"""
             </div>
             
             <div class="chart-legend">
@@ -1357,19 +1630,31 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                         <span>Current Time</span>
                     </div>
                 </div>
-                <p><strong>💡 Tip:</strong> Hover over certificate bars for detailed information. Click filter buttons to show specific certificate types or statuses.</p>
+                <p><strong>💡 Tip:</strong> Hover over certificate bars for detailed information. Click PKI group headers to expand/collapse certificate lists. Use filter buttons to show specific certificate types or statuses.</p>
             </div>
         </div>
         
         <script>
             // Chart data and configuration
-            const chartData = {json.dumps(chart_data)};
+            const pkiGroups = {json.dumps(pki_groups)};
             const timelineStart = new Date('{timeline_start.isoformat()}');
             const timelineEnd = new Date('{timeline_end.isoformat()}');
             const currentTime = new Date();
             
-            let filteredData = [...chartData];
+            let filteredData = [];
             let canvas, ctx, tooltip;
+            
+            // Flatten PKI groups into certificate list for chart rendering
+            function flattenPkiGroups() {{
+                filteredData = [];
+                pkiGroups.forEach(group => {{
+                    group.certificates.forEach(cert => {{
+                        cert.groupId = group.id;
+                        cert.groupName = group.name;
+                        filteredData.push(cert);
+                    }});
+                }});
+            }}
             
             // Initialize chart when DOM is ready
             document.addEventListener('DOMContentLoaded', function() {{
@@ -1382,7 +1667,8 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 canvas.addEventListener('mouseleave', hideChartTooltip);
                 canvas.addEventListener('click', handleClick);
                 
-                // Initial render
+                // Initialize data and render
+                flattenPkiGroups();
                 renderChart();
             }});
             
@@ -1392,7 +1678,7 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 // Clear canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                const padding = {{ top: 40, right: 60, bottom: 60, left: 250 }};
+                const padding = {{ top: 50, right: 60, bottom: 80, left: 300 }};
                 const chartWidth = canvas.width - padding.left - padding.right;
                 const chartHeight = canvas.height - padding.top - padding.bottom;
                 
@@ -1403,44 +1689,80 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 // Draw time axis
                 drawTimeAxis(ctx, padding, chartWidth, chartHeight);
                 
-                // Draw certificate bars
-                const barHeight = Math.max(20, (chartHeight - 20) / filteredData.length);
+                // Group certificates by PKI engine for visual hierarchy
+                const groupedCerts = {{}};
+                filteredData.forEach(cert => {{
+                    if (!groupedCerts[cert.groupId]) {{
+                        groupedCerts[cert.groupId] = [];
+                    }}
+                    groupedCerts[cert.groupId].push(cert);
+                }});
+                
+                // Draw certificate bars grouped by PKI engine
+                let currentY = padding.top;
+                const groupSpacing = 30;
+                const barHeight = 20;
                 const barSpacing = 4;
                 
-                filteredData.forEach((cert, index) => {{
-                    const y = padding.top + index * (barHeight + barSpacing);
-                    const startX = timeToX(new Date(cert.start).getTime());
-                    const endX = timeToX(new Date(cert.end).getTime());
-                    const width = Math.max(2, endX - startX);
+                Object.keys(groupedCerts).forEach(groupId => {{
+                    const groupCerts = groupedCerts[groupId];
+                    const group = pkiGroups.find(g => g.id === groupId);
                     
-                    // Get color based on status
-                    const colors = getStatusColors(cert.status_class);
-                    
-                    // Draw certificate bar with gradient
-                    const gradient = ctx.createLinearGradient(startX, y, endX, y);
-                    gradient.addColorStop(0, colors.start);
-                    gradient.addColorStop(1, colors.end);
-                    
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(startX, y, width, barHeight - 2);
-                    
-                    // Add border
-                    ctx.strokeStyle = colors.border;
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(startX, y, width, barHeight - 2);
-                    
-                    // Draw certificate name
+                    // Draw group label
                     ctx.fillStyle = '#2c3e50';
-                    ctx.font = '12px Arial';
+                    ctx.font = 'bold 14px Arial';
                     ctx.textAlign = 'right';
                     ctx.textBaseline = 'middle';
+                    ctx.fillText(`🏛️ ${{group.name}}`, padding.left - 15, currentY + 10);
                     
-                    const displayName = cert.name.length > 35 ? cert.name.substring(0, 32) + '...' : cert.name;
-                    const typeIcon = cert.type === 'root_ca' ? '📜' : cert.type === 'intermediate' ? '🔗' : '📄';
-                    ctx.fillText(`${{typeIcon}} ${{displayName}}`, padding.left - 10, y + barHeight / 2);
+                    // Draw group separator line
+                    ctx.strokeStyle = '#ecf0f1';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(padding.left, currentY + 20);
+                    ctx.lineTo(padding.left + chartWidth, currentY + 20);
+                    ctx.stroke();
                     
-                    // Store bar position for mouse interaction
-                    cert._chartBounds = {{ x: startX, y: y, width: width, height: barHeight - 2 }};
+                    currentY += 25;
+                    
+                    // Draw certificates in this group
+                    groupCerts.forEach((cert, index) => {{
+                        const y = currentY + index * (barHeight + barSpacing);
+                        const startX = timeToX(new Date(cert.start).getTime());
+                        const endX = timeToX(new Date(cert.end).getTime());
+                        const width = Math.max(2, endX - startX);
+                        
+                        // Get color based on status
+                        const colors = getStatusColors(cert.status_class);
+                        
+                        // Draw certificate bar with gradient
+                        const gradient = ctx.createLinearGradient(startX, y, endX, y);
+                        gradient.addColorStop(0, colors.start);
+                        gradient.addColorStop(1, colors.end);
+                        
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(startX, y, width, barHeight - 2);
+                        
+                        // Add border
+                        ctx.strokeStyle = colors.border;
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(startX, y, width, barHeight - 2);
+                        
+                        // Draw certificate name with indentation
+                        ctx.fillStyle = '#2c3e50';
+                        ctx.font = '12px Arial';
+                        ctx.textAlign = 'right';
+                        ctx.textBaseline = 'middle';
+                        
+                        const displayName = cert.name.length > 30 ? cert.name.substring(0, 27) + '...' : cert.name;
+                        const typeIcon = cert.is_main_ca ? '�' : '📄';
+                        ctx.fillText(`  ${{typeIcon}} ${{displayName}}`, padding.left - 20, y + barHeight / 2);
+                        
+                        // Store bar position for mouse interaction
+                        cert._chartBounds = {{ x: startX, y: y, width: width, height: barHeight - 2 }};
+                    }});
+                    
+                    currentY += groupCerts.length * (barHeight + barSpacing) + groupSpacing;
                 }});
                 
                 // Draw current time line
@@ -1451,7 +1773,7 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     ctx.setLineDash([5, 5]);
                     ctx.beginPath();
                     ctx.moveTo(currentX, padding.top);
-                    ctx.lineTo(currentX, padding.top + chartHeight);
+                    ctx.lineTo(currentX, currentY - groupSpacing);
                     ctx.stroke();
                     ctx.setLineDash([]);
                     
@@ -1459,12 +1781,12 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     ctx.fillStyle = '#e74c3c';
                     ctx.font = 'bold 12px Arial';
                     ctx.textAlign = 'center';
-                    ctx.fillText('NOW', currentX, padding.top - 10);
+                    ctx.fillText('NOW', currentX, padding.top - 15);
                 }}
             }}
             
             function drawTimeAxis(ctx, padding, chartWidth, chartHeight) {{
-                const axisY = padding.top + chartHeight;
+                const axisY = canvas.height - padding.bottom + 20;
                 
                 // Draw main axis line
                 ctx.strokeStyle = '#34495e';
@@ -1560,8 +1882,15 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 }});
                 
                 if (clickedCert) {{
-                    // Could implement certificate details modal here
-                    console.log('Clicked certificate:', clickedCert);
+                    // Scroll to corresponding PKI group and highlight
+                    const groupElement = document.querySelector(`[data-group-id="${{clickedCert.groupId}}"]`);
+                    if (groupElement) {{
+                        groupElement.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+                        groupElement.style.boxShadow = '0 0 20px rgba(52, 152, 219, 0.5)';
+                        setTimeout(() => {{
+                            groupElement.style.boxShadow = '';
+                        }}, 2000);
+                    }}
                 }}
             }}
             
@@ -1574,9 +1903,9 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 
                 tooltip.innerHTML = `
                     <strong>${{cert.name}}</strong><br>
-                    <strong>Type:</strong> ${{cert.type.replace('_', ' ').replace(/\\b\\w/g, l => l.toUpperCase())}}<br>
+                    <strong>PKI Engine:</strong> ${{cert.groupName}}<br>
+                    <strong>Type:</strong> ${{cert.is_main_ca ? 'Main CA' : 'Issuer Certificate'}}<br>
                     <strong>Valid:</strong> ${{startDate}} - ${{endDate}}<br>
-                    <strong>Engine:</strong> ${{cert.engine_path}}<br>
                     <strong>Namespace:</strong> ${{cert.namespace}}<br>
                     ${{cert.description ? `<strong>Description:</strong> ${{cert.description}}<br>` : ''}}
                     ${{cert.issuer_id ? `<strong>Issuer ID:</strong> ${{cert.issuer_id}}<br>` : ''}}
@@ -1601,16 +1930,78 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 event.target.classList.add('active');
                 
                 // Filter data
+                flattenPkiGroups(); // Reset to all data
+                
                 if (filter === 'all') {{
-                    filteredData = [...chartData];
+                    // filteredData already contains all data
                 }} else if (['valid', 'warning', 'critical', 'expired', 'future'].includes(filter)) {{
-                    filteredData = chartData.filter(cert => cert.status_class === filter);
-                }} else if (['root_ca', 'intermediate', 'issuer'].includes(filter)) {{
-                    filteredData = chartData.filter(cert => cert.type === filter);
+                    filteredData = filteredData.filter(cert => cert.status_class === filter);
+                }} else if (['root_ca', 'issuer'].includes(filter)) {{
+                    filteredData = filteredData.filter(cert => 
+                        (filter === 'root_ca' && cert.is_main_ca) || 
+                        (filter === 'issuer' && !cert.is_main_ca)
+                    );
                 }}
+                
+                // Also filter PKI groups list
+                filterPkiGroups(filter);
                 
                 // Re-render chart
                 renderChart();
+            }}
+            
+            function filterPkiGroups(filter) {{
+                document.querySelectorAll('.pki-cert-item').forEach(item => {{
+                    const certType = item.getAttribute('data-cert-type');
+                    const certStatus = item.getAttribute('data-status');
+                    const isMainCa = item.querySelector('.pki-cert-icon').textContent === '📜';
+                    
+                    let visible = false;
+                    if (filter === 'all') {{
+                        visible = true;
+                    }} else if (['valid', 'warning', 'critical', 'expired', 'future'].includes(filter)) {{
+                        visible = certStatus === filter;
+                    }} else if (filter === 'root_ca') {{
+                        visible = isMainCa;
+                    }} else if (filter === 'issuer') {{
+                        visible = !isMainCa;
+                    }}
+                    
+                    item.style.display = visible ? 'flex' : 'none';
+                }});
+            }}
+            
+            // PKI Group Management Functions
+            function togglePkiGroup(groupId) {{
+                const content = document.getElementById(`pki-content-${{groupId}}`);
+                const indicator = document.getElementById(`pki-indicator-${{groupId}}`);
+                
+                if (content.classList.contains('collapsed')) {{
+                    content.classList.remove('collapsed');
+                    indicator.classList.remove('collapsed');
+                    indicator.textContent = '▼';
+                }} else {{
+                    content.classList.add('collapsed');
+                    indicator.classList.add('collapsed');
+                    indicator.textContent = '▶';
+                }}
+            }}
+            
+            function toggleAllPkiGroups(expand) {{
+                document.querySelectorAll('.pki-group-content').forEach(content => {{
+                    const groupId = content.id.replace('pki-content-', '');
+                    const indicator = document.getElementById(`pki-indicator-${{groupId}}`);
+                    
+                    if (expand) {{
+                        content.classList.remove('collapsed');
+                        indicator.classList.remove('collapsed');
+                        indicator.textContent = '▼';
+                    }} else {{
+                        content.classList.add('collapsed');
+                        indicator.classList.add('collapsed');
+                        indicator.textContent = '▶';
+                    }}
+                }});
             }}
         </script>"""
     
