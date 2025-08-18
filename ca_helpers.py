@@ -59,6 +59,58 @@ def extract_common_name_from_certificate(cert_pem: str) -> Optional[str]:
         return None
 
 
+def extract_certificate_hierarchy_info(cert_pem: str) -> Dict[str, Optional[str]]:
+    """
+    Extract hierarchy information from a certificate PEM.
+    
+    Args:
+        cert_pem: Certificate in PEM format
+        
+    Returns:
+        Dictionary with subject CN, issuer CN, and basic CA information
+    """
+    try:
+        if not cert_pem or not cert_pem.strip():
+            return {'subject_cn': None, 'issuer_cn': None, 'is_ca': False, 'is_self_signed': False}
+        
+        cert = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
+        
+        # Extract subject common name
+        subject_cn = None
+        for attribute in cert.subject:
+            if attribute.oid == x509.NameOID.COMMON_NAME:
+                subject_cn = attribute.value
+                break
+        
+        # Extract issuer common name
+        issuer_cn = None
+        for attribute in cert.issuer:
+            if attribute.oid == x509.NameOID.COMMON_NAME:
+                issuer_cn = attribute.value
+                break
+        
+        # Check if it's a CA certificate
+        is_ca = False
+        try:
+            basic_constraints = cert.extensions.get_extension_for_oid(x509.oid.ExtensionOID.BASIC_CONSTRAINTS)
+            is_ca = basic_constraints.value.ca
+        except x509.ExtensionNotFound:
+            # If no basic constraints, it's likely not a CA
+            is_ca = False
+        
+        # Check if self-signed (subject == issuer)
+        is_self_signed = cert.subject == cert.issuer
+        
+        return {
+            'subject_cn': subject_cn,
+            'issuer_cn': issuer_cn,
+            'is_ca': is_ca,
+            'is_self_signed': is_self_signed
+        }
+    except Exception:
+        return {'subject_cn': None, 'issuer_cn': None, 'is_ca': False, 'is_self_signed': False}
+
+
 def ensure_timezone_aware(dt: datetime.datetime) -> datetime.datetime:
     """
     Ensure a datetime object is timezone-aware (UTC).
@@ -177,6 +229,7 @@ def process_issuer_details(client: hvac.Client, mount_path: str, issuer_id: str)
         # Parse certificate details
         cert_dates = parse_certificate_dates(issuer_cert)
         common_name = extract_common_name_from_certificate(issuer_cert)
+        hierarchy_info = extract_certificate_hierarchy_info(issuer_cert)
         
         return {
             'id': issuer_id,
@@ -184,7 +237,11 @@ def process_issuer_details(client: hvac.Client, mount_path: str, issuer_id: str)
             'certificate': issuer_cert,
             'not_before': cert_dates['not_before'],
             'not_after': cert_dates['not_after'],
-            'common_name': common_name
+            'common_name': common_name,
+            'subject_cn': hierarchy_info['subject_cn'],
+            'issuer_cn': hierarchy_info['issuer_cn'],
+            'is_ca': hierarchy_info['is_ca'],
+            'is_self_signed': hierarchy_info['is_self_signed']
         }
     except Exception:
         return None
@@ -206,10 +263,14 @@ def get_ca_certificate_info(client: hvac.Client, mount_path: str) -> Dict[str, A
         if ca_cert_response and 'data' in ca_cert_response:
             cert_pem = ca_cert_response['data'].get('certificate', '')
             cert_dates = parse_certificate_dates(cert_pem)
+            hierarchy_info = extract_certificate_hierarchy_info(cert_pem)
             return {
                 'ca_certificate': cert_pem,
                 'cert_not_before': cert_dates['not_before'],
-                'cert_not_after': cert_dates['not_after']
+                'cert_not_after': cert_dates['not_after'],
+                'ca_subject_cn': hierarchy_info['subject_cn'],
+                'ca_issuer_cn': hierarchy_info['issuer_cn'],
+                'ca_is_self_signed': hierarchy_info['is_self_signed']
             }
     except Exception:
         pass
@@ -217,7 +278,10 @@ def get_ca_certificate_info(client: hvac.Client, mount_path: str) -> Dict[str, A
     return {
         'ca_certificate': None,
         'cert_not_before': None,
-        'cert_not_after': None
+        'cert_not_after': None,
+        'ca_subject_cn': None,
+        'ca_issuer_cn': None,
+        'ca_is_self_signed': False
     }
 
 

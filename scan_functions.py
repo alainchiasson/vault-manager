@@ -1377,57 +1377,49 @@ def generate_html_report(scan_data: Dict[str, Any], timeline_width: int = 50) ->
     return html_content
 
 
-def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
+def _build_certificate_hierarchy_groups(pki_engines: List[Dict[str, Any]], all_namespaces: bool = False) -> List[Dict[str, Any]]:
     """
-    Generate interactive HTML timeline visualization with hierarchical PKI engine grouping.
+    Build certificate groups based on actual certificate hierarchy rather than PKI engine grouping.
     
     Args:
         pki_engines: List of PKI engine information dictionaries
-        timeline_width: Width of the timeline in characters (not used in chart view)
         all_namespaces: Whether this is an all-namespaces scan
         
     Returns:
-        HTML string containing the interactive chart timeline visualization with collapsible PKI groups
+        List of hierarchy groups with certificates organized by parent-child relationships
     """
     import datetime
-    import json
     from utils import format_datetime
     
-    if not pki_engines:
-        return ""
-    
-    # Organize certificates by PKI engine with hierarchy
-    pki_groups = []
+    # Collect all certificates with their hierarchy information
+    all_certs = []
     now = datetime.datetime.now(datetime.timezone.utc)
     
-    for engine_idx, engine in enumerate(pki_engines):
+    for engine in pki_engines:
         engine_namespace = engine.get('namespace', 'root')
-        if all_namespaces and engine_namespace != 'root':
-            engine_display_name = f"{engine_namespace}::{engine['path']}"
-        else:
-            engine_display_name = engine['path']
-        
-        # Create PKI engine group
-        engine_group = {
-            'id': f"pki-group-{engine_idx}",
-            'name': engine_display_name,
-            'namespace': engine_namespace,
-            'description': engine.get('description', ''),
-            'certificates': []
-        }
+        engine_path = engine['path']
         
         # Add main CA certificate if available
         if engine.get('cert_not_before') and engine.get('cert_not_after'):
+            if all_namespaces and engine_namespace != 'root':
+                full_name = f"{engine_namespace}::{engine_path} (Main CA)"
+            else:
+                full_name = f"{engine_path} (Main CA)"
+            
             main_ca_cert = {
-                'name': f"{engine_display_name} (Main CA)",
+                'name': full_name,
+                'display_name': full_name,
                 'start': engine['cert_not_before'].isoformat() if engine['cert_not_before'].tzinfo else engine['cert_not_before'].replace(tzinfo=datetime.timezone.utc).isoformat(),
                 'end': engine['cert_not_after'].isoformat() if engine['cert_not_after'].tzinfo else engine['cert_not_after'].replace(tzinfo=datetime.timezone.utc).isoformat(),
                 'type': 'root_ca',
-                'engine_path': engine['path'],
+                'engine_path': engine_path,
                 'namespace': engine_namespace,
                 'description': engine.get('description', ''),
                 'accessor': engine.get('accessor', ''),
-                'is_main_ca': True
+                'is_main_ca': True,
+                'subject_cn': engine.get('ca_subject_cn'),
+                'issuer_cn': engine.get('ca_issuer_cn'),
+                'is_self_signed': engine.get('ca_is_self_signed', False)
             }
             
             # Calculate status
@@ -1454,23 +1446,33 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     main_ca_cert['status_class'] = "valid"
             
             main_ca_cert['days_remaining'] = (cert_end - now).days if now <= cert_end else -(now - cert_end).days
-            engine_group['certificates'].append(main_ca_cert)
+            all_certs.append(main_ca_cert)
         
         # Add all issuers
         for issuer in engine.get('issuers', []):
             if issuer.get('not_before') and issuer.get('not_after'):
                 issuer_name = issuer.get('common_name') or issuer.get('name', 'Unknown')
                 
+                if all_namespaces and engine_namespace != 'root':
+                    full_name = f"{engine_namespace}::{engine_path}/{issuer_name}"
+                else:
+                    full_name = f"{engine_path}/{issuer_name}"
+                
                 issuer_cert = {
                     'name': issuer_name,
+                    'display_name': full_name,
                     'start': issuer['not_before'].isoformat() if issuer['not_before'].tzinfo else issuer['not_before'].replace(tzinfo=datetime.timezone.utc).isoformat(),
                     'end': issuer['not_after'].isoformat() if issuer['not_after'].tzinfo else issuer['not_after'].replace(tzinfo=datetime.timezone.utc).isoformat(),
                     'type': 'issuer',
-                    'engine_path': engine['path'],
+                    'engine_path': engine_path,
                     'namespace': engine_namespace,
-                    'description': f"Issuer in {engine['path']}",
+                    'description': f"Issuer in {engine_path}",
                     'issuer_id': issuer.get('id', ''),
-                    'is_main_ca': False
+                    'is_main_ca': False,
+                    'subject_cn': issuer.get('subject_cn'),
+                    'issuer_cn': issuer.get('issuer_cn'),
+                    'is_self_signed': issuer.get('is_self_signed', False),
+                    'is_ca': issuer.get('is_ca', False)
                 }
                 
                 # Calculate status
@@ -1497,14 +1499,96 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                         issuer_cert['status_class'] = "valid"
                 
                 issuer_cert['days_remaining'] = (cert_end - now).days if now <= cert_end else -(now - cert_end).days
-                engine_group['certificates'].append(issuer_cert)
-        
-        if engine_group['certificates']:  # Only add groups that have certificates
-            pki_groups.append(engine_group)
+                all_certs.append(issuer_cert)
     
-    # Calculate timeline bounds
+    # Build hierarchy by finding parent-child relationships
+    hierarchy_groups = []
+    processed_certs = set()
+    
+    # First, find all root CAs (self-signed certificates)
+    root_cas = [cert for cert in all_certs if cert.get('is_self_signed', False) or cert['type'] == 'root_ca']
+    
+    for root_ca in root_cas:
+        if id(root_ca) in processed_certs:
+            continue
+            
+        # Create a group for this root CA hierarchy
+        group = {
+            'id': f"hierarchy-{len(hierarchy_groups)}",
+            'name': root_ca['subject_cn'] or root_ca['name'],
+            'root_ca': root_ca,
+            'certificates': [root_ca],
+            'total_certs': 0
+        }
+        
+        processed_certs.add(id(root_ca))
+        
+        # Find all certificates signed by this root CA
+        def find_children(parent_cert):
+            children = []
+            parent_cn = parent_cert.get('subject_cn')
+            if not parent_cn:
+                return children
+                
+            for cert in all_certs:
+                if (id(cert) not in processed_certs and 
+                    cert.get('issuer_cn') == parent_cn and 
+                    not cert.get('is_self_signed', False)):
+                    children.append(cert)
+                    processed_certs.add(id(cert))
+                    # Recursively find children of this certificate
+                    children.extend(find_children(cert))
+            return children
+        
+        children = find_children(root_ca)
+        group['certificates'].extend(children)
+        group['total_certs'] = len(group['certificates'])
+        
+        hierarchy_groups.append(group)
+    
+    # Handle any remaining certificates that don't fit into a clear hierarchy
+    remaining_certs = [cert for cert in all_certs if id(cert) not in processed_certs]
+    if remaining_certs:
+        group = {
+            'id': f"hierarchy-{len(hierarchy_groups)}",
+            'name': 'Unlinked Certificates',
+            'root_ca': None,
+            'certificates': remaining_certs,
+            'total_certs': len(remaining_certs)
+        }
+        hierarchy_groups.append(group)
+    
+    return hierarchy_groups
+
+
+def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timeline_width: int = 50, all_namespaces: bool = False) -> str:
+    """
+    Generate interactive HTML timeline visualization with certificate hierarchy grouping.
+    
+    Args:
+        pki_engines: List of PKI engine information dictionaries
+        timeline_width: Width of the timeline in characters (not used in chart view)
+        all_namespaces: Whether this is an all-namespaces scan
+        
+    Returns:
+        HTML string containing the interactive chart timeline visualization with hierarchy-based groups
+    """
+    import datetime
+    import json
+    from utils import format_datetime
+    
+    if not pki_engines:
+        return ""
+    
+    # Build certificate hierarchy groups instead of PKI engine groups
+    hierarchy_groups = _build_certificate_hierarchy_groups(pki_engines, all_namespaces)
+    
+    if not hierarchy_groups:
+        return ""
+    
+    # Calculate timeline bounds from all certificates in hierarchy groups
     all_certs = []
-    for group in pki_groups:
+    for group in hierarchy_groups:
         all_certs.extend(group['certificates'])
     
     if not all_certs:
@@ -1537,8 +1621,8 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 <div class="timeline-control" onclick="filterTimelineChart('root_ca')">Root CAs</div>
                 <div class="timeline-control" onclick="filterTimelineChart('issuer')">Issuers</div>
                 <div style="margin-left: auto;">
-                    <button onclick="toggleAllPkiGroups(true)" class="timeline-control">Expand All</button>
-                    <button onclick="toggleAllPkiGroups(false)" class="timeline-control">Collapse All</button>
+                    <button onclick="toggleAllHierarchyGroups(true)" class="timeline-control">Expand All</button>
+                    <button onclick="toggleAllHierarchyGroups(false)" class="timeline-control">Collapse All</button>
                 </div>
             </div>
             
@@ -1547,51 +1631,80 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 <div id="chartTooltip" class="chart-tooltip"></div>
             </div>
             
-            <!-- PKI Engine Groups for Certificate Organization -->
+            <!-- Certificate Hierarchy Groups -->
             <div class="pki-groups-container">
-                <h3>📋 PKI Engine Certificate Groups</h3>"""
+                <h3>🌳 Certificate Hierarchy Groups</h3>"""
     
-    for group_idx, group in enumerate(pki_groups):
-        total_certs = len(group['certificates'])
+    for group_idx, group in enumerate(hierarchy_groups):
+        total_certs = group['total_certs']
         valid_certs = len([c for c in group['certificates'] if c['status_class'] == 'valid'])
         warning_certs = len([c for c in group['certificates'] if c['status_class'] == 'warning'])
         critical_certs = len([c for c in group['certificates'] if c['status_class'] == 'critical'])
         expired_certs = len([c for c in group['certificates'] if c['status_class'] == 'expired'])
         
+        # Determine group icon based on root CA
+        group_icon = "🌳" if group['root_ca'] else "📋"
+        
         html += f"""
                 <div class="pki-group-card" data-group-id="{group['id']}">
-                    <div class="pki-group-header" onclick="togglePkiGroup('{group['id']}')">
+                    <div class="pki-group-header" onclick="toggleHierarchyGroup('{group['id']}')">
                         <div class="pki-group-title">
-                            <span class="pki-group-icon">🏛️</span>
+                            <span class="pki-group-icon">{group_icon}</span>
                             <span class="pki-group-name">{group['name']}</span>
                             <span class="pki-group-badge">{total_certs} cert{'s' if total_certs != 1 else ''}</span>
-                            {f'<span class="namespace-badge">{group["namespace"]}</span>' if group['namespace'] != 'root' else ''}
                         </div>
                         <div class="pki-group-status">
                             {f'<span class="status-count valid">{valid_certs}✓</span>' if valid_certs > 0 else ''}
                             {f'<span class="status-count warning">{warning_certs}⚡</span>' if warning_certs > 0 else ''}
                             {f'<span class="status-count critical">{critical_certs}⚠️</span>' if critical_certs > 0 else ''}
                             {f'<span class="status-count expired">{expired_certs}❌</span>' if expired_certs > 0 else ''}
-                            <span class="pki-collapse-indicator collapsed" id="pki-indicator-{group['id']}">▶</span>
+                            <span class="pki-collapse-indicator collapsed" id="hierarchy-indicator-{group['id']}">▶</span>
                         </div>
                     </div>
-                    <div class="pki-group-content collapsed" id="pki-content-{group['id']}">
-                        <div class="pki-group-description">{group['description'] or 'No description'}</div>
+                    <div class="pki-group-content collapsed" id="hierarchy-content-{group['id']}">
+                        <div class="pki-group-description">
+                            {f"Root CA: {group['root_ca']['subject_cn']}" if group['root_ca'] else 'Certificates without clear hierarchy'}
+                        </div>
                         <div class="pki-certificates-list">"""
         
-        for cert in group['certificates']:
-            cert_icon = '📜' if cert['is_main_ca'] else '📄'
+        # Sort certificates within the group: root CA first, then by hierarchy level
+        def sort_certs_by_hierarchy(cert):
+            if cert.get('is_main_ca') or cert.get('is_self_signed'):
+                return (0, cert['start'])  # Root CAs first
+            elif cert.get('is_ca'):
+                return (1, cert['start'])  # Intermediate CAs second
+            else:
+                return (2, cert['start'])  # Other certificates last
+        
+        sorted_certs = sorted(group['certificates'], key=sort_certs_by_hierarchy)
+        
+        for cert in sorted_certs:
+            # Determine icon and indentation based on hierarchy level
+            if cert.get('is_main_ca') or cert.get('is_self_signed'):
+                cert_icon = '📜'
+                indent_prefix = ''
+            elif cert.get('is_ca'):
+                cert_icon = '🔗'
+                indent_prefix = '  ↳ '
+            else:
+                cert_icon = '📄'
+                indent_prefix = '    ↳ '
+            
             status_class = f"status-{cert['status_class']}"
             
             html += f"""
                             <div class="pki-cert-item {cert['status_class']}" data-cert-type="{cert['type']}" data-status="{cert['status_class']}">
                                 <span class="pki-cert-icon">{cert_icon}</span>
-                                <span class="pki-cert-name">{cert['name']}</span>
+                                <span class="pki-cert-name">{indent_prefix}{cert['display_name']}</span>
                                 <span class="pki-cert-validity">
                                     {format_datetime(datetime.datetime.fromisoformat(cert['start']))} → 
                                     {format_datetime(datetime.datetime.fromisoformat(cert['end']))}
                                 </span>
                                 <span class="pki-cert-status {status_class}">{cert['status']}</span>
+                                <span class="pki-cert-hierarchy">
+                                    <small>Engine: {cert['engine_path']}</small>
+                                    {f"<small> | Namespace: {cert['namespace']}</small>" if cert['namespace'] != 'root' else ''}
+                                </span>
                             </div>"""
         
         html += f"""
@@ -1630,13 +1743,13 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                         <span>Current Time</span>
                     </div>
                 </div>
-                <p><strong>💡 Tip:</strong> Hover over certificate bars for detailed information. Click PKI group headers to expand/collapse certificate lists. Use filter buttons to show specific certificate types or statuses.</p>
+                <p><strong>💡 Tip:</strong> Hover over certificate bars for detailed information. Click hierarchy group headers to expand/collapse certificate lists. Certificates are grouped by their actual CA hierarchy, not by PKI engine.</p>
             </div>
         </div>
         
         <script>
             // Chart data and configuration
-            const pkiGroups = {json.dumps(pki_groups)};
+            const hierarchyGroups = {json.dumps(hierarchy_groups)};
             const timelineStart = new Date('{timeline_start.isoformat()}');
             const timelineEnd = new Date('{timeline_end.isoformat()}');
             const currentTime = new Date();
@@ -1644,13 +1757,14 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
             let filteredData = [];
             let canvas, ctx, tooltip;
             
-            // Flatten PKI groups into certificate list for chart rendering
-            function flattenPkiGroups() {{
+            // Flatten hierarchy groups into certificate list for chart rendering
+            function flattenHierarchyGroups() {{
                 filteredData = [];
-                pkiGroups.forEach(group => {{
+                hierarchyGroups.forEach(group => {{
                     group.certificates.forEach(cert => {{
                         cert.groupId = group.id;
                         cert.groupName = group.name;
+                        cert.hierarchyLevel = cert.is_main_ca || cert.is_self_signed ? 0 : (cert.is_ca ? 1 : 2);
                         filteredData.push(cert);
                     }});
                 }});
@@ -1668,7 +1782,7 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 canvas.addEventListener('click', handleClick);
                 
                 // Initialize data and render
-                flattenPkiGroups();
+                flattenHierarchyGroups();
                 renderChart();
             }});
             
@@ -1678,7 +1792,7 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 // Clear canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                const padding = {{ top: 50, right: 60, bottom: 80, left: 300 }};
+                const padding = {{ top: 50, right: 60, bottom: 80, left: 350 }};
                 const chartWidth = canvas.width - padding.left - padding.right;
                 const chartHeight = canvas.height - padding.top - padding.bottom;
                 
@@ -1689,7 +1803,7 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 // Draw time axis
                 drawTimeAxis(ctx, padding, chartWidth, chartHeight);
                 
-                // Group certificates by PKI engine for visual hierarchy
+                // Group certificates by hierarchy for visual display
                 const groupedCerts = {{}};
                 filteredData.forEach(cert => {{
                     if (!groupedCerts[cert.groupId]) {{
@@ -1698,22 +1812,23 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     groupedCerts[cert.groupId].push(cert);
                 }});
                 
-                // Draw certificate bars grouped by PKI engine
+                // Draw certificate bars grouped by hierarchy
                 let currentY = padding.top;
-                const groupSpacing = 30;
-                const barHeight = 20;
-                const barSpacing = 4;
+                const groupSpacing = 35;
+                const barHeight = 18;
+                const barSpacing = 3;
                 
                 Object.keys(groupedCerts).forEach(groupId => {{
                     const groupCerts = groupedCerts[groupId];
-                    const group = pkiGroups.find(g => g.id === groupId);
+                    const group = hierarchyGroups.find(g => g.id === groupId);
                     
                     // Draw group label
                     ctx.fillStyle = '#2c3e50';
                     ctx.font = 'bold 14px Arial';
                     ctx.textAlign = 'right';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(`🏛️ ${{group.name}}`, padding.left - 15, currentY + 10);
+                    const groupIcon = group.root_ca ? '🌳' : '📋';
+                    ctx.fillText(`${{groupIcon}} ${{group.name}}`, padding.left - 15, currentY + 10);
                     
                     // Draw group separator line
                     ctx.strokeStyle = '#ecf0f1';
@@ -1725,8 +1840,16 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     
                     currentY += 25;
                     
+                    // Sort certificates by hierarchy level within group
+                    const sortedCerts = groupCerts.sort((a, b) => {{
+                        if (a.hierarchyLevel !== b.hierarchyLevel) {{
+                            return a.hierarchyLevel - b.hierarchyLevel;
+                        }}
+                        return new Date(a.start) - new Date(b.start);
+                    }});
+                    
                     // Draw certificates in this group
-                    groupCerts.forEach((cert, index) => {{
+                    sortedCerts.forEach((cert, index) => {{
                         const y = currentY + index * (barHeight + barSpacing);
                         const startX = timeToX(new Date(cert.start).getTime());
                         const endX = timeToX(new Date(cert.end).getTime());
@@ -1748,21 +1871,34 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                         ctx.lineWidth = 1;
                         ctx.strokeRect(startX, y, width, barHeight - 2);
                         
-                        // Draw certificate name with indentation
+                        // Draw certificate name with hierarchy indentation
                         ctx.fillStyle = '#2c3e50';
-                        ctx.font = '12px Arial';
+                        ctx.font = '11px Arial';
                         ctx.textAlign = 'right';
                         ctx.textBaseline = 'middle';
                         
-                        const displayName = cert.name.length > 30 ? cert.name.substring(0, 27) + '...' : cert.name;
-                        const typeIcon = cert.is_main_ca ? '�' : '📄';
-                        ctx.fillText(`  ${{typeIcon}} ${{displayName}}`, padding.left - 20, y + barHeight / 2);
+                        let displayName = cert.name.length > 25 ? cert.name.substring(0, 22) + '...' : cert.name;
+                        let typeIcon = '📄';
+                        let indent = '';
+                        
+                        if (cert.is_main_ca || cert.is_self_signed) {{
+                            typeIcon = '📜';
+                            indent = '';
+                        }} else if (cert.is_ca) {{
+                            typeIcon = '🔗';
+                            indent = '  ↳ ';
+                        }} else {{
+                            typeIcon = '📄';
+                            indent = '    ↳ ';
+                        }}
+                        
+                        ctx.fillText(`${{indent}}${{typeIcon}} ${{displayName}}`, padding.left - 20, y + barHeight / 2);
                         
                         // Store bar position for mouse interaction
                         cert._chartBounds = {{ x: startX, y: y, width: width, height: barHeight - 2 }};
                     }});
                     
-                    currentY += groupCerts.length * (barHeight + barSpacing) + groupSpacing;
+                    currentY += sortedCerts.length * (barHeight + barSpacing) + groupSpacing;
                 }});
                 
                 // Draw current time line
@@ -1882,7 +2018,7 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 }});
                 
                 if (clickedCert) {{
-                    // Scroll to corresponding PKI group and highlight
+                    // Scroll to corresponding hierarchy group and highlight
                     const groupElement = document.querySelector(`[data-group-id="${{clickedCert.groupId}}"]`);
                     if (groupElement) {{
                         groupElement.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
@@ -1901,12 +2037,18 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     `${{cert.days_remaining}} days remaining` : 
                     `Expired ${{Math.abs(cert.days_remaining)}} days ago`;
                 
+                const certType = cert.is_main_ca || cert.is_self_signed ? 'Root CA' : 
+                                cert.is_ca ? 'Intermediate CA' : 'Certificate';
+                
                 tooltip.innerHTML = `
-                    <strong>${{cert.name}}</strong><br>
-                    <strong>PKI Engine:</strong> ${{cert.groupName}}<br>
-                    <strong>Type:</strong> ${{cert.is_main_ca ? 'Main CA' : 'Issuer Certificate'}}<br>
+                    <strong>${{cert.display_name}}</strong><br>
+                    <strong>Hierarchy Group:</strong> ${{cert.groupName}}<br>
+                    <strong>Type:</strong> ${{certType}}<br>
                     <strong>Valid:</strong> ${{startDate}} - ${{endDate}}<br>
+                    <strong>PKI Engine:</strong> ${{cert.engine_path}}<br>
                     <strong>Namespace:</strong> ${{cert.namespace}}<br>
+                    ${{cert.subject_cn ? `<strong>Subject CN:</strong> ${{cert.subject_cn}}<br>` : ''}}
+                    ${{cert.issuer_cn && !cert.is_self_signed ? `<strong>Issuer CN:</strong> ${{cert.issuer_cn}}<br>` : ''}}
                     ${{cert.description ? `<strong>Description:</strong> ${{cert.description}}<br>` : ''}}
                     ${{cert.issuer_id ? `<strong>Issuer ID:</strong> ${{cert.issuer_id}}<br>` : ''}}
                     <strong>Status:</strong> ${{cert.status}}<br>
@@ -1930,7 +2072,7 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 event.target.classList.add('active');
                 
                 // Filter data
-                flattenPkiGroups(); // Reset to all data
+                flattenHierarchyGroups(); // Reset to all data
                 
                 if (filter === 'all') {{
                     // filteredData already contains all data
@@ -1938,23 +2080,23 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     filteredData = filteredData.filter(cert => cert.status_class === filter);
                 }} else if (['root_ca', 'issuer'].includes(filter)) {{
                     filteredData = filteredData.filter(cert => 
-                        (filter === 'root_ca' && cert.is_main_ca) || 
-                        (filter === 'issuer' && !cert.is_main_ca)
+                        (filter === 'root_ca' && (cert.is_main_ca || cert.is_self_signed)) || 
+                        (filter === 'issuer' && !(cert.is_main_ca || cert.is_self_signed))
                     );
                 }}
                 
-                // Also filter PKI groups list
-                filterPkiGroups(filter);
+                // Also filter hierarchy groups list
+                filterHierarchyGroups(filter);
                 
                 // Re-render chart
                 renderChart();
             }}
             
-            function filterPkiGroups(filter) {{
+            function filterHierarchyGroups(filter) {{
                 document.querySelectorAll('.pki-cert-item').forEach(item => {{
                     const certType = item.getAttribute('data-cert-type');
                     const certStatus = item.getAttribute('data-status');
-                    const isMainCa = item.querySelector('.pki-cert-icon').textContent === '📜';
+                    const isRootCa = item.querySelector('.pki-cert-icon').textContent === '📜';
                     
                     let visible = false;
                     if (filter === 'all') {{
@@ -1962,19 +2104,19 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                     }} else if (['valid', 'warning', 'critical', 'expired', 'future'].includes(filter)) {{
                         visible = certStatus === filter;
                     }} else if (filter === 'root_ca') {{
-                        visible = isMainCa;
+                        visible = isRootCa;
                     }} else if (filter === 'issuer') {{
-                        visible = !isMainCa;
+                        visible = !isRootCa;
                     }}
                     
                     item.style.display = visible ? 'flex' : 'none';
                 }});
             }}
             
-            // PKI Group Management Functions
-            function togglePkiGroup(groupId) {{
-                const content = document.getElementById(`pki-content-${{groupId}}`);
-                const indicator = document.getElementById(`pki-indicator-${{groupId}}`);
+            // Hierarchy Group Management Functions
+            function toggleHierarchyGroup(groupId) {{
+                const content = document.getElementById(`hierarchy-content-${{groupId}}`);
+                const indicator = document.getElementById(`hierarchy-indicator-${{groupId}}`);
                 
                 if (content.classList.contains('collapsed')) {{
                     content.classList.remove('collapsed');
@@ -1987,10 +2129,10 @@ def _generate_interactive_html_timeline(pki_engines: List[Dict[str, Any]], timel
                 }}
             }}
             
-            function toggleAllPkiGroups(expand) {{
+            function toggleAllHierarchyGroups(expand) {{
                 document.querySelectorAll('.pki-group-content').forEach(content => {{
-                    const groupId = content.id.replace('pki-content-', '');
-                    const indicator = document.getElementById(`pki-indicator-${{groupId}}`);
+                    const groupId = content.id.replace('hierarchy-content-', '');
+                    const indicator = document.getElementById(`hierarchy-indicator-${{groupId}}`);
                     
                     if (expand) {{
                         content.classList.remove('collapsed');
